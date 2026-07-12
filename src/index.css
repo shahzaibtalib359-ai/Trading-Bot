@@ -1,0 +1,96 @@
+:root {
+  color-scheme: dark;
+  --background: #050607;
+  --surface: rgba(9, 12, 15, 0.72);
+  --surface-strong: rgba(12, 16, 20, 0.88);
+  --text: #eef4f2;
+  --muted: #8f9aa6;
+  --border: rgba(255, 255, 255, 0.1);
+  --green: #27e38b;
+  --green-soft: rgba(39, 227, 139, 0.16);
+  --red: #ff4d63;
+  --red-soft: rgba(255, 77, 99, 0.16);
+  --shadow:
+    0 28px 70px rgba(0, 0, 0, 0.5),
+    0 8px 24px rgba(0, 0, 0, 0.24);
+  font-family:
+    'Segoe UI Variable Display', 'Segoe UI Variable Text', 'Segoe UI',
+    system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  background:
+    linear-gradient(135deg, rgba(26, 53, 37, 0.26) 0%, transparent 28%),
+    linear-gradient(315deg, rgba(72, 22, 29, 0.28) 0%, transparent 28%),
+    linear-gradient(180deg, #040506 0%, #07090c 55%, #090c10 100%);
+  color: var(--text);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background:
+    linear-gradient(135deg, rgba(26, 53, 37, 0.26) 0%, transparent 28%),
+    linear-gradient(315deg, rgba(72, 22, 29, 0.28) 0%, transparent 28%),
+    linear-gradient(180deg, #040506 0%, #07090c 55%, #090c10 100%);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: inherit;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.03) 0, rgba(255, 255, 255, 0.03) 1px, transparent 1px, transparent 100%),
+    linear-gradient(245deg, rgba(255, 255, 255, 0.02) 0, rgba(255, 255, 255, 0.02) 1px, transparent 1px, transparent 100%);
+  background-size: 120px 120px, 180px 180px;
+  opacity: 0.45;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(39, 227, 139, 0.85);
+  outline-offset: 2px;
+}
+
+img,
+svg {
+  display: block;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+#root {
+  min-height: 100vh;
+}
