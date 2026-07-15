@@ -1,0 +1,14 @@
+.venv
+node_modules
+desktop
+backend
+mobile
+logs
+dist
+__pycache__
+.git-portable
+.netlify
+scratch
+tmp-playwright
+*.png
+build.log
