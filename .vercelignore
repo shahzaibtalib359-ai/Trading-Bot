@@ -1,7 +1,6 @@
 .venv
 node_modules
 desktop
-backend
 mobile
 logs
 dist
