@@ -1,0 +1,44 @@
+functionsDirectory = "C:\\Users\\PMLS\\Documents\\Trading-Bot\\netlify\\functions"
+functionsDirectoryOrigin = "config-v1"
+redirectsOrigin = "config"
+plugins = []
+headers = []
+
+[build]
+publish = "C:\\Users\\PMLS\\Documents\\Trading-Bot\\dist"
+publishOrigin = "config"
+commandOrigin = "ui"
+command = "npm run build"
+functions = "C:\\Users\\PMLS\\Documents\\Trading-Bot\\netlify\\functions"
+
+[build.environment]
+NODE_VERSION = "22"
+NODE_OPTIONS = "--max-old-space-size=8192"
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[functions]
+
+[functions."*"]
+
+[[redirects]]
+from = "/api/*"
+to = "/.netlify/functions/api/:splat"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
