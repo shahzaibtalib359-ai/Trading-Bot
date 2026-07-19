@@ -35,5 +35,5 @@ async def startup() -> None:
     SignalRepository().initialize()
 
 
-app.include_router(router, prefix="/api")
+app.include_router(router)
 
