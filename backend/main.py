@@ -30,9 +30,9 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-async def startup() -> None:
-    SignalRepository().initialize()
+# @app.on_event("startup")
+# async def startup() -> None:
+#     SignalRepository().initialize()
 
 
 app.include_router(router)
