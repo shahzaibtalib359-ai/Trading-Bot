@@ -43,7 +43,6 @@ class Settings(BaseSettings):
         env_prefix="TRADING_"
     )
 
-
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
