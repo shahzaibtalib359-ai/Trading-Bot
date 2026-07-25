@@ -35,5 +35,5 @@ app.add_middleware(
 #     SignalRepository().initialize()
 
 
-app.include_router(router)
+app.include_router(router, prefix="/api")
 
