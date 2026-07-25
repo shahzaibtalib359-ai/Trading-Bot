@@ -1,13 +1,11 @@
-import os
-import sys
-from pathlib import Path
+from fastapi import FastAPI
 
-# Add root directory to sys.path so backend imports work correctly
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.append(str(ROOT))
+app = FastAPI()
 
-# Import the FastAPI app
-from backend.main import app
+@app.get("/")
+def root():
+    return {"message": "API is working"}
 
-# Vercel Serverless Function expects the handler to be named 'app'
-# which we just imported directly
+@app.get("/healthz")
+def health():
+    return {"status": "ok"}
