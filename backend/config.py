@@ -1,62 +1,37 @@
-from functools import lru_cache
-from pathlib import Path
+from __future__ import annotations
+
+import logging
 import os
+from logging.handlers import RotatingFileHandler
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-BASE_DIR = Path(__file__).resolve().parent.parent
+from .config import get_settings
 
 
-class Settings(BaseSettings):
-    app_name: str = "AI Trading Signal Engine"
-    environment: str = "development"
-    database_type: str = "sqlite"
+def configure_logging() -> None:
+    settings = get_settings()
 
-    firebase_credentials_path: Path = BASE_DIR / "firebase-credentials.json"
-    firebase_credentials_json: str | None = None
-
-    database_path: Path = BASE_DIR / "backend" / "database" / "signals.sqlite3"
-    log_path: Path = BASE_DIR / "logs" / "backend.log"
-
-    cors_origins: list[str] = ["*"]
-
-    market_provider: str = "auto"
-    external_market_api_url: str | None = None
-    external_market_api_key: str | None = None
-
-    quotex_api_url: str | None = None
-    quotex_api_key: str | None = None
-    quotex_ssid: str | None = None
-
-    xm_api_url: str | None = None
-    xm_api_key: str | None = None
-
-    binance_api_url: str = "https://api.binance.com"
-    binance_api_key: str | None = None
-    binance_secret_key: str | None = None
-
-    max_quotex_data_age_seconds: int = 180
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_prefix="TRADING_"
+    formatter = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
     )
 
-@lru_cache
-def get_settings() -> Settings:
-    settings = Settings()
+    handlers = []
 
-    # Database folder only for local/server writable environments
+    # Vercel filesystem is read-only, don't create log files there
     if os.environ.get("VERCEL") != "1":
-        settings.database_path.parent.mkdir(
-            parents=True,
-            exist_ok=True
+        file_handler = RotatingFileHandler(
+            settings.log_path,
+            maxBytes=1_000_000,
+            backupCount=5,
+            encoding="utf-8",
         )
+        file_handler.setFormatter(formatter)
+        handlers.append(file_handler)
 
-        settings.log_path.parent.mkdir(
-            parents=True,
-            exist_ok=True
-        )
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    handlers.append(stream_handler)
 
-    return settings
+    logging.basicConfig(
+        level=logging.INFO,
+        handlers=handlers
+    )
