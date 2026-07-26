@@ -200,12 +200,38 @@ async def verify_user_token(
 async def verify_admin_token(
     x_admin_token: str = Header(default=""),
 ) -> str:
-    """Dependency that validates admin session token."""
-    _cleanup_sessions()
-    if not x_admin_token or x_admin_token not in _admin_sessions:
-        raise HTTPException(status_code=401, detail="Admin authentication required.")
-    return x_admin_token
+    if not x_admin_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Admin authentication required."
+        )
 
+    try:
+        payload = jwt.decode(
+            x_admin_token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM]
+        )
+
+        if payload.get("type") != "admin":
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid admin token."
+            )
+
+        return x_admin_token
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=401,
+            detail="Admin token expired."
+        )
+
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid admin token."
+        )
 
 # ── Pydantic request/response models ─────────────────────────────────
 
