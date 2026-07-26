@@ -1746,6 +1746,9 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
   const [newDays, setNewDays] = useState('365')
   const [newKey, setNewKey] = useState<string | null>(null)
 
+  // Users tab filter: 'all' | 'active'
+  const [userFilter, setUserFilter] = useState<'all' | 'active'>('all')
+
   // Security tab states
   const [newPassword, setNewPassword] = useState('')
   const [changePasswordError, setChangePasswordError] = useState('')
@@ -1784,11 +1787,10 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
       })
       if (res.ok) {
         const data = await res.json()
-        setNewKey(data.key)
-        
+
         // 2. Register the user with specified email or a dummy auto-generated one
         const bindEmail = newEmail.trim() ? newEmail.trim() : `${name.toLowerCase().replace(/\s+/g, '_')}@license.local`
-        
+
         await fetch(`${API}/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1798,9 +1800,11 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
             password: `SS${Math.random().toString(36).slice(2, 10)}`,
           }),
         }).catch(() => { /* user may already exist */ })
-        
+
+        // Show generated key AFTER clearing form so the key display persists
         setNewOwner('')
         setNewEmail('')
+        setNewKey(data.key)   // set key last so it isn't cleared by onChange handlers
         loadAll()
       }
     } catch { /* ignore */ }
@@ -1913,14 +1917,26 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
       {/* Stats */}
       {stats && (
         <div className="stats-grid">
-          <div className="stat-card purple">
+          {/* Clickable: Total Users → Users tab (all) */}
+          <div
+            className="stat-card purple"
+            style={{ cursor: 'pointer' }}
+            title="Click to view all users"
+            onClick={() => { setUserFilter('all'); setTab('users') }}
+          >
             <div className="stat-card-header">
               <div className="stat-card-icon" style={{ color: 'var(--accent-purple)' }}><IconUsers size={20} /></div>
               <span className="stat-card-label">Total Users</span>
             </div>
             <div className="stat-card-value">{stats.total_users}</div>
           </div>
-          <div className="stat-card green">
+          {/* Clickable: Active Users → Users tab (active filter) */}
+          <div
+            className="stat-card green"
+            style={{ cursor: 'pointer' }}
+            title="Click to view active users"
+            onClick={() => { setUserFilter('active'); setTab('users') }}
+          >
             <div className="stat-card-header">
               <div className="stat-card-icon" style={{ color: 'var(--accent-green)' }}><IconCheck size={18} /></div>
               <span className="stat-card-label">Active Users</span>
@@ -2106,62 +2122,86 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
       )}
 
       {/* Users Tab */}
-      {tab === 'users' && !loading && (
-        <div className="admin-section">
-          <div className="admin-section-header">
-            <div className="admin-section-title">Users ({users.length})</div>
-          </div>
-
-          {users.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-state-icon" style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-muted)', marginBottom: 12 }}>
-                <IconUsers size={44} />
+      {tab === 'users' && !loading && (() => {
+        const filteredUsers = userFilter === 'active' ? users.filter(u => u.is_active) : users
+        return (
+          <div className="admin-section">
+            <div className="admin-section-header">
+              <div className="admin-section-title">
+                Users ({filteredUsers.length}{userFilter === 'active' ? ' active' : ''})
               </div>
-              <div className="empty-state-text">No users registered yet</div>
+              {/* Filter toggle */}
+              <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+                <button
+                  className={`admin-btn ${userFilter === 'all' ? 'primary' : ''}`}
+                  style={{ fontSize: 11, padding: '3px 10px' }}
+                  onClick={() => setUserFilter('all')}
+                >
+                  All
+                </button>
+                <button
+                  className={`admin-btn ${userFilter === 'active' ? 'success' : ''}`}
+                  style={{ fontSize: 11, padding: '3px 10px' }}
+                  onClick={() => setUserFilter('active')}
+                >
+                  Active Only
+                </button>
+              </div>
             </div>
-          ) : (
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Username</th>
-                  <th>Email</th>
-                  <th>Created</th>
-                  <th>Subscription</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map(u => (
-                  <tr key={u.id}>
-                    <td>{u.id}</td>
-                    <td style={{ fontWeight: 600 }}>{u.username}</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.email}</td>
-                    <td>{fmtDate(u.created_at)}</td>
-                    <td>
-                      <span style={{ fontSize: 11, padding: '2px 8px', background: 'rgba(124,58,237,0.1)', borderRadius: 50, color: 'var(--accent-purple)' }}>
-                        {u.subscription_tier}
-                      </span>
-                    </td>
-                    <td>
-                      {u.is_active
-                        ? <><span className="status-dot active" /> Active</>
-                        : <><span className="status-dot inactive" /> Suspended</>
-                      }
-                    </td>
-                    <td>
-                      <button className={`admin-btn ${u.is_active ? 'danger' : 'success'}`} onClick={() => toggleUser(u.id, !!u.is_active)}>
-                        {u.is_active ? 'Suspend' : 'Activate'}
-                      </button>
-                    </td>
+
+            {filteredUsers.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon" style={{ display: 'flex', justifyContent: 'center', color: 'var(--text-muted)', marginBottom: 12 }}>
+                  <IconUsers size={44} />
+                </div>
+                <div className="empty-state-text">
+                  {userFilter === 'active' ? 'No active users found' : 'No users registered yet'}
+                </div>
+              </div>
+            ) : (
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Created</th>
+                    <th>Subscription</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+                </thead>
+                <tbody>
+                  {filteredUsers.map(u => (
+                    <tr key={u.id}>
+                      <td>{u.id}</td>
+                      <td style={{ fontWeight: 600 }}>{u.username}</td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.email}</td>
+                      <td>{fmtDate(u.created_at)}</td>
+                      <td>
+                        <span style={{ fontSize: 11, padding: '2px 8px', background: 'rgba(124,58,237,0.1)', borderRadius: 50, color: 'var(--accent-purple)' }}>
+                          {u.subscription_tier}
+                        </span>
+                      </td>
+                      <td>
+                        {u.is_active
+                          ? <><span className="status-dot active" /> Active</>
+                          : <><span className="status-dot inactive" /> Suspended</>
+                        }
+                      </td>
+                      <td>
+                        <button className={`admin-btn ${u.is_active ? 'danger' : 'success'}`} onClick={() => toggleUser(u.id, !!u.is_active)}>
+                          {u.is_active ? 'Suspend' : 'Activate'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Security & Logs Tab */}
       {tab === 'security' && !loading && (
