@@ -26,9 +26,14 @@ from backend.models import (
     TradingMode,
 )
 from backend.signal_manager import signal_manager
-
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+JWT_SECRET = "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_123456789"
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_HOURS = 12
+
+
 
 # ── In-memory admin session store ────────────────────────────────────
 
