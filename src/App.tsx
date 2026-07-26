@@ -1745,6 +1745,8 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
   const [newEmail, setNewEmail] = useState('')
   const [newDays, setNewDays] = useState('365')
   const [newKey, setNewKey] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   // Users tab filter: 'all' | 'active'
   const [userFilter, setUserFilter] = useState<'all' | 'active'>('all')
@@ -1777,27 +1779,41 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
 
   const createLicense = async () => {
     const name = newOwner.trim()
-    if (!name) return
+    if (!name) { setCreateError('Please enter a user name.'); return }
+    setCreating(true)
+    setCreateError(null)
+    setNewKey(null)
     try {
-      // Create the license — backend now auto-creates the user account too
       const res = await fetch(`${API}/admin/licenses`, {
         method: 'POST',
         headers: headers(),
         body: JSON.stringify({
           owner: name,
           days: parseInt(newDays) || 365,
-          email: newEmail.trim(),   // passed to backend for user creation
+          email: newEmail.trim(),
         }),
       })
       if (res.ok) {
         const data = await res.json()
-        // Show generated key AFTER clearing form so the key display persists
-        setNewOwner('')
-        setNewEmail('')
-        setNewKey(data.key)
-        loadAll()
+        if (data.key) {
+          setNewOwner('')
+          setNewEmail('')
+          setNewKey(data.key)
+          setCreateError(null)
+          loadAll()
+        } else {
+          setCreateError('Server returned success but no key was found. Please try again.')
+        }
+      } else {
+        let msg = 'Failed to generate key.'
+        try { const err = await res.json(); msg = err.detail || msg } catch { /* ignore */ }
+        setCreateError(`Error ${res.status}: ${msg}`)
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      setCreateError('Cannot connect to backend. Check your internet or backend server.')
+    } finally {
+      setCreating(false)
+    }
   }
 
   const toggleLicense = async (key: string, active: boolean) => {
@@ -2000,7 +2016,7 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
               <input
                 placeholder="User name (e.g. Ahmed)"
                 value={newOwner}
-                onChange={e => { setNewOwner(e.target.value); setNewKey(null) }}
+                onChange={e => { setNewOwner(e.target.value); setNewKey(null); setCreateError(null) }}
                 onKeyDown={e => e.key === 'Enter' && createLicense()}
                 style={{ flex: 1, minWidth: 150 }}
               />
@@ -2008,16 +2024,28 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
                 placeholder="User Gmail (Optional)"
                 type="email"
                 value={newEmail}
-                onChange={e => { setNewEmail(e.target.value); setNewKey(null) }}
+                onChange={e => { setNewEmail(e.target.value); setNewKey(null); setCreateError(null) }}
                 onKeyDown={e => e.key === 'Enter' && createLicense()}
                 style={{ flex: 1, minWidth: 180 }}
               />
               <input placeholder="Days" type="number" value={newDays} onChange={e => setNewDays(e.target.value)} style={{ width: 80, minWidth: 80 }} />
-              <button className="admin-btn primary" onClick={createLicense} style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <IconKey size={14} /> Generate Key
+              <button
+                className="admin-btn primary"
+                onClick={createLicense}
+                disabled={creating}
+                style={{ whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: creating ? 0.7 : 1 }}
+              >
+                {creating ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Creating…</> : <><IconKey size={14} /> Generate Key</>}
               </button>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>Enter user name & optional Gmail → click Generate Key → license created + user added automatically</div>
+
+            {/* ── Error Display ── */}
+            {createError && (
+              <div style={{ marginTop: 12, background: 'rgba(239,68,68,0.08)', border: '1.5px solid rgba(239,68,68,0.35)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#f87171', display: 'flex', alignItems: 'center', gap: 8 }}>
+                ⚠️ {createError}
+              </div>
+            )}
 
             {/* ── Generated Key Display ── */}
             {newKey && (
