@@ -650,34 +650,40 @@ async def export_history(
 
 # ── Admin authentication ─────────────────────────────────────────────
 
-
 @router.post("/admin/login", response_model=AdminLoginResponse)
 async def admin_login(
     body: AdminLoginRequest,
     repository: SignalRepository = Depends(get_repository),
 ) -> AdminLoginResponse:
     stored_hash = repository.get_admin_password_hash()
+
     if stored_hash is None:
-        raise HTTPException(status_code=500, detail="Admin config not initialized.")
+        raise HTTPException(
+            status_code=500,
+            detail="Admin config not initialized."
+        )
+
     if not verify_password(body.password, stored_hash):
-        raise HTTPException(status_code=401, detail="Invalid admin password.")
-   payload = {
-    "type": "admin",
-    "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRE_HOURS)
-}
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid admin password."
+        )
 
-token = jwt.encode(
-    payload,
-    JWT_SECRET,
-    algorithm=JWT_ALGORITHM
-)
+    payload = {
+        "type": "admin",
+        "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRE_HOURS),
+    }
 
-return AdminLoginResponse(
-    token=token,
-    message="Admin login successful."
+    token = jwt.encode(
+        payload,
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHM,
+    )
 
-
-class AdminResetPasswordRequest(BaseModel):
+    return AdminLoginResponse(
+        token=token,
+        message="Admin login successful.",
+    )
     recovery_key: str
     new_password: str
 
