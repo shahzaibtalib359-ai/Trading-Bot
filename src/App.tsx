@@ -1779,32 +1779,22 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
     const name = newOwner.trim()
     if (!name) return
     try {
-      // 1. Create the license
+      // Create the license — backend now auto-creates the user account too
       const res = await fetch(`${API}/admin/licenses`, {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ owner: name, days: parseInt(newDays) || 365 }),
+        body: JSON.stringify({
+          owner: name,
+          days: parseInt(newDays) || 365,
+          email: newEmail.trim(),   // passed to backend for user creation
+        }),
       })
       if (res.ok) {
         const data = await res.json()
-
-        // 2. Register the user with specified email or a dummy auto-generated one
-        const bindEmail = newEmail.trim() ? newEmail.trim() : `${name.toLowerCase().replace(/\s+/g, '_')}@license.local`
-
-        await fetch(`${API}/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: name,
-            email: bindEmail,
-            password: `SS${Math.random().toString(36).slice(2, 10)}`,
-          }),
-        }).catch(() => { /* user may already exist */ })
-
         // Show generated key AFTER clearing form so the key display persists
         setNewOwner('')
         setNewEmail('')
-        setNewKey(data.key)   // set key last so it isn't cleared by onChange handlers
+        setNewKey(data.key)
         loadAll()
       }
     } catch { /* ignore */ }

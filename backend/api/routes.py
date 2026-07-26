@@ -943,6 +943,8 @@ async def admin_update_user_subscription(
 class CreateLicenseRequest(BaseModel):
     owner: str
     days: int = 365
+    email: str = ""          # optional — admin can provide user email
+    password: str = ""       # optional — auto-generated if blank
 
 
 class LicenseStatusUpdate(BaseModel):
@@ -955,10 +957,29 @@ async def admin_create_license(
     repository: SignalRepository = Depends(get_repository),
     _admin: str = Depends(verify_admin_token),
 ) -> dict:
-    """Admin generates a new license key for a user."""
+    """Admin generates a new license key and auto-creates the user account."""
     key = f"SS-{secrets.token_hex(4).upper()}-{secrets.token_hex(4).upper()}-{secrets.token_hex(4).upper()}"
     expires_at = (datetime.now(timezone.utc) + timedelta(days=max(1, body.days))).isoformat()
     license_id = repository.insert_license(key=key, owner=body.owner, expires_at=expires_at)
+
+    # ── Auto-create user account if not already exists ────────────────
+    try:
+        existing = repository.get_user_by_username(body.owner)
+        if existing is None:
+            bind_email = body.email.strip() if body.email.strip() else \
+                f"{body.owner.lower().replace(' ', '_')}@license.local"
+            bind_password = body.password.strip() if body.password.strip() else \
+                f"SS{secrets.token_hex(4)}"
+            repository.insert_user(
+                username=body.owner,
+                email=bind_email,
+                password_hash=hash_password(bind_password),
+            )
+            logger.info("Auto-created user '%s' alongside license.", body.owner)
+    except Exception as exc:
+        logger.warning("Could not auto-create user for license owner '%s': %s", body.owner, exc)
+    # ─────────────────────────────────────────────────────────────────
+
     return {
         "id": license_id,
         "key": key,
