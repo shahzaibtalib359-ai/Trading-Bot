@@ -635,9 +635,20 @@ async def admin_login(
         raise HTTPException(status_code=500, detail="Admin config not initialized.")
     if not verify_password(body.password, stored_hash):
         raise HTTPException(status_code=401, detail="Invalid admin password.")
-    token = secrets.token_urlsafe(32)
-    _admin_sessions[token] = datetime.now(timezone.utc)
-    return AdminLoginResponse(token=token, message="Admin login successful.")
+   payload = {
+    "type": "admin",
+    "exp": datetime.utcnow() + timedelta(hours=JWT_EXPIRE_HOURS)
+}
+
+token = jwt.encode(
+    payload,
+    JWT_SECRET,
+    algorithm=JWT_ALGORITHM
+)
+
+return AdminLoginResponse(
+    token=token,
+    message="Admin login successful."
 
 
 class AdminResetPasswordRequest(BaseModel):
