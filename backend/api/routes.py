@@ -236,6 +236,11 @@ async def verify_admin_token(
 # ── Pydantic request/response models ─────────────────────────────────
 
 
+class AdminResetPasswordRequest(BaseModel):
+    recovery_key: str
+    new_password: str
+
+
 class AdminLoginRequest(BaseModel):
     password: str
 
@@ -400,8 +405,12 @@ async def scan_quotex_pairs(
     batch_size = 5
     for i in range(0, len(otc_pairs), batch_size):
         batch = otc_pairs[i:i + batch_size]
-        batch_results = await asyncio.gather(*[_scan_one(p) for p in batch], return_exceptions=False)
+        batch_results = await asyncio.gather(*[_scan_one(p) for p in batch], return_exceptions=True)
         for r in batch_results:
+            if isinstance(r, Exception):
+                # Log or handle the exception without crashing the batch
+                print(f"Error scanning pair in batch: {r}")
+                continue
             if r is not None:
                 results.append(r)
 
@@ -684,8 +693,6 @@ async def admin_login(
         token=token,
         message="Admin login successful.",
     )
-    recovery_key: str
-    new_password: str
 
 
 @router.post("/admin/reset-password")
