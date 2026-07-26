@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import secrets
 import time
+import jwt
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
