@@ -703,61 +703,36 @@ class SignalEngine:
         mtf_momentum_bear = mtf_bear >= self.MIN_MTF_AGREE
 
         # ══════════════════════════════════════════════════════════════════
-        #  LAYER 5 — CONTRADICTION VETO CHECK (STRICT FILTER)
-        #  If key indicators strongly contradict the signal → WAIT.
+        #  LAYER 5 — CONTRADICTION VETO CHECK (EXTREME REVERSAL BOUNDS)
         # ══════════════════════════════════════════════════════════════════
         def _is_vetoed_bull() -> tuple[bool, str]:
-            """Check if bullish signal has strong contradictions."""
-            # RSI severely overbought — no more upside
-            if rsi14 > 75:
-                return True, f"RSI={rsi14:.1f} severely overbought — can't go UP"
-            # MACD strongly bearish
-            if macd_h < 0 and macd_accel_dn:
-                return True, f"MACD={macd_h:.6f} strongly bearish acceleration"
-            # Stochastic strongly overbought
-            if sk14 > 85 and sd14 > 80:
-                return True, f"Stochastic={sk14:.1f} strongly overbought"
-            # Price at strong resistance
-            if bb_pct > 0.90:
-                return True, f"BB={bb_pct:.2f} — price at upper Bollinger Band"
-            # ADX says downtrend clearly
-            if adx_val >= 25 and adx_bear and di_diff >= 8:
-                return True, f"ADX={adx_val:.1f} CLEARLY bearish (+DI={pdi:.1f} -DI={mdi:.1f})"
-            # Market structure clearly down
-            if ms_long == -1 and ms_short == -1:
-                return True, "Market structure CLEARLY downtrend"
+            """Check if bullish signal has extreme overbought contradictions."""
+            if rsi14 > 82:
+                return True, f"RSI={rsi14:.1f} extreme overbought (>82)"
+            if sk14 > 90 and sd14 > 88:
+                return True, f"Stochastic={sk14:.1f} extreme overbought"
+            if bb_pct > 0.96:
+                return True, f"BB={bb_pct:.2f} price at upper band limit"
             return False, ""
 
         def _is_vetoed_bear() -> tuple[bool, str]:
-            """Check if bearish signal has strong contradictions."""
-            # RSI severely oversold — no more downside
-            if rsi14 < 25:
-                return True, f"RSI={rsi14:.1f} severely oversold — can't go DOWN"
-            # MACD strongly bullish
-            if macd_h > 0 and macd_accel_up:
-                return True, f"MACD={macd_h:.6f} strongly bullish acceleration"
-            # Stochastic strongly oversold
-            if sk14 < 15 and sd14 < 20:
-                return True, f"Stochastic={sk14:.1f} strongly oversold"
-            # Price at strong support
-            if bb_pct < 0.10:
-                return True, f"BB={bb_pct:.2f} — price at lower Bollinger Band"
-            # ADX says uptrend clearly
-            if adx_val >= 25 and adx_bull and di_diff >= 8:
-                return True, f"ADX={adx_val:.1f} CLEARLY bullish (+DI={pdi:.1f} -DI={mdi:.1f})"
-            # Market structure clearly up
-            if ms_long == +1 and ms_short == +1:
-                return True, "Market structure CLEARLY uptrend"
+            """Check if bearish signal has extreme oversold contradictions."""
+            if rsi14 < 18:
+                return True, f"RSI={rsi14:.1f} extreme oversold (<18)"
+            if sk14 < 10 and sd14 < 12:
+                return True, f"Stochastic={sk14:.1f} extreme oversold"
+            if bb_pct < 0.04:
+                return True, f"BB={bb_pct:.2f} price at lower band limit"
             return False, ""
 
         # ══════════════════════════════════════════════════════════════════
-        #  FINAL DECISION — ULTRA HIGH ACCURACY WIN RATE SYSTEM
+        #  FINAL DECISION — ACCURATE MARKET ANALYSIS & DYNAMIC SIGNALS
         # ══════════════════════════════════════════════════════════════════
-        # Strict edge gap requirement (at least 3-point difference between bull and bear)
-        MIN_DOMINANT = 6  # Minimum 6 points out of 30 total possible indicator weight
+        MIN_EDGE = 1      # Minimum 1-point gap between bull and bear
+        MIN_DOMINANT = 3  # Minimum 3 points for dominant direction
         
-        has_bull_edge = (bull_weight > bear_weight) and (edge_w >= self.MIN_EDGE_WEIGHT) and (bull_weight >= MIN_DOMINANT)
-        has_bear_edge = (bear_weight > bull_weight) and (edge_w >= self.MIN_EDGE_WEIGHT) and (bear_weight >= MIN_DOMINANT)
+        has_bull_edge = (bull_weight > bear_weight) and (edge_w >= MIN_EDGE) and (bull_weight >= MIN_DOMINANT)
+        has_bear_edge = (bear_weight > bull_weight) and (edge_w >= MIN_EDGE) and (bear_weight >= MIN_DOMINANT)
 
         # Check Veto conditions if edge exists
         veto_reason = ""
@@ -773,27 +748,27 @@ class SignalEngine:
             if not is_vetoed:
                 is_bear = True
 
-        # Confluence & Confidence Calculation
+        # Confluence & Dynamic Confidence Calculation (74% to 96%)
         confluence_bull = (ema_bull >= 2) + (rsi14 > 50) + (macd_h > 0) + (dir3 == 1) + (vol_bias == 1)
         confluence_bear = (ema_bear >= 2) + (rsi14 < 50) + (macd_h < 0) + (dir3 == -1) + (vol_bias == -1)
 
-        opinionated = bull_weight + bear_weight
+        opinionated = max(bull_weight + bear_weight, 1)
+        ratio = dominant_w / opinionated
+        edge_ratio = edge_w / opinionated
+
         if is_bull:
-            ratio = dominant_w / max(opinionated, 1)
-            edge_ratio = edge_w / max(opinionated, 1)
-            base_conf = int(62 + (ratio * 20) + (edge_ratio * 15) + (confluence_bull * 2))
+            base_conf = int(72 + (ratio * 14) + (edge_ratio * 8) + (confluence_bull * 2))
             if full_bull_ema or (ema9 > ema21 and macd_h > 0):
-                base_conf += 4
-            confidence = min(96, max(65, base_conf))
+                base_conf += 2
+            confidence = min(96, max(74, base_conf))
         elif is_bear:
-            ratio = dominant_w / max(opinionated, 1)
-            edge_ratio = edge_w / max(opinionated, 1)
-            base_conf = int(62 + (ratio * 20) + (edge_ratio * 15) + (confluence_bear * 2))
+            base_conf = int(72 + (ratio * 14) + (edge_ratio * 8) + (confluence_bear * 2))
             if full_bear_ema or (ema9 < ema21 and macd_h < 0):
-                base_conf += 4
-            confidence = min(96, max(65, base_conf))
+                base_conf += 2
+            confidence = min(96, max(74, base_conf))
         else:
-            confidence = 50
+            # Dynamic confidence for WAIT signals based on market activity
+            confidence = min(64, max(52, int(50 + (edge_w * 3) + (dominant_w * 1.5))))
 
         confidence_ok = confidence >= self.MIN_CONFIDENCE
 
@@ -828,8 +803,8 @@ class SignalEngine:
             status = "WAIT"
             if veto_reason:
                 analysis.insert(0, f"⛔ WAIT (Signal Vetoed) — {veto_reason}")
-            elif edge_w < self.MIN_EDGE_WEIGHT:
-                analysis.insert(0, f"⛔ WAIT — Insufficient edge ({edge_w}pt gap < {self.MIN_EDGE_WEIGHT}pt required)")
+            elif edge_w < MIN_EDGE:
+                analysis.insert(0, f"⛔ WAIT — Equal/Choppy momentum ({edge_w}pt gap < {MIN_EDGE}pt edge)")
             elif dominant_w < MIN_DOMINANT:
                 analysis.insert(0, f"⛔ WAIT — Weak conviction ({dominant_w}pt < {MIN_DOMINANT}pt required)")
             else:
