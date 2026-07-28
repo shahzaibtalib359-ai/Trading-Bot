@@ -315,14 +315,14 @@ class SignalEngine:
     When in doubt → WAIT. Always.
     """
 
-    # ── Ultra-Strict Thresholds ──────────────────────────────────────────
-    MIN_CONFIDENCE   = 65   # % confidence — only high-certainty signals
-    MIN_EDGE_WEIGHT  = 5    # STRICT: minimum 5-point gap between bull & bear
-    MIN_ADX          = 20   # ADX must be 20+ for trending market
+    # ── Balanced Thresholds — Good Signals + Reasonable Frequency ──────
+    MIN_CONFIDENCE   = 62   # % confidence — slightly lower for more signals
+    MIN_EDGE_WEIGHT  = 3    # minimum 3-point gap between bull & bear (was 5)
+    MIN_ADX          = 17   # ADX 17+ = some trend present (was 20)
     MIN_EMA_BULL     = 3    # At least 3/4 EMA conditions must be bullish
     MIN_EMA_BEAR     = 3    # At least 3/4 EMA conditions must be bearish
-    MIN_MTF_AGREE    = 2    # At least 2 of 3 momentum timeframes must agree
-    CONTRADICTION_VETO = True  # Any STRONG counter-indicator kills the signal
+    MIN_MTF_AGREE    = 1    # At least 1 of 3 momentum timeframes must agree (was 2)
+    CONTRADICTION_VETO = True  # Strong counter-indicators still block signal
 
     def analyze(self, request: SignalRequest, candles: list[Candle]) -> SignalResponse:
         if len(candles) < 80:
