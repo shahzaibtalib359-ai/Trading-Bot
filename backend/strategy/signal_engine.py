@@ -751,30 +751,47 @@ class SignalEngine:
             return False, ""
 
         # ══════════════════════════════════════════════════════════════════
+        #  FINAL DECISION — ULTRA HIGH ACCURACY WIN RATE SYSTEM
         # ══════════════════════════════════════════════════════════════════
-                # ══════════════════════════════════════════════════════════════════
-        #  FINAL DECISION — ULTRA HIGH ACCURACY WIN RATE SYSTEM (8/9+ Target)
-        # ══════════════════════════════════════════════════════════════════
-        is_bull = bull_weight > bear_weight
-        is_bear = bear_weight > bull_weight
+        # Strict edge gap requirement (at least 3-point difference between bull and bear)
+        MIN_DOMINANT = 6  # Minimum 6 points out of 30 total possible indicator weight
+        
+        has_bull_edge = (bull_weight > bear_weight) and (edge_w >= self.MIN_EDGE_WEIGHT) and (bull_weight >= MIN_DOMINANT)
+        has_bear_edge = (bear_weight > bull_weight) and (edge_w >= self.MIN_EDGE_WEIGHT) and (bear_weight >= MIN_DOMINANT)
 
-        # Trend & Momentum Confluence Score
+        # Check Veto conditions if edge exists
+        veto_reason = ""
+        is_bull = False
+        is_bear = False
+
+        if has_bull_edge:
+            is_vetoed, veto_reason = _is_vetoed_bull()
+            if not is_vetoed:
+                is_bull = True
+        elif has_bear_edge:
+            is_vetoed, veto_reason = _is_vetoed_bear()
+            if not is_vetoed:
+                is_bear = True
+
+        # Confluence & Confidence Calculation
         confluence_bull = (ema_bull >= 2) + (rsi14 > 50) + (macd_h > 0) + (dir3 == 1) + (vol_bias == 1)
         confluence_bear = (ema_bear >= 2) + (rsi14 < 50) + (macd_h < 0) + (dir3 == -1) + (vol_bias == -1)
 
-        # High Accuracy Confidence Calculation
+        opinionated = bull_weight + bear_weight
         if is_bull:
-            base_conf = 72 + min(23, confluence_bull * 5)
-            # Boost if EMA & MACD fully agree
+            ratio = dominant_w / max(opinionated, 1)
+            edge_ratio = edge_w / max(opinionated, 1)
+            base_conf = int(62 + (ratio * 20) + (edge_ratio * 15) + (confluence_bull * 2))
             if full_bull_ema or (ema9 > ema21 and macd_h > 0):
-                base_conf += 6
-            confidence = min(96, base_conf)
+                base_conf += 4
+            confidence = min(96, max(65, base_conf))
         elif is_bear:
-            base_conf = 72 + min(23, confluence_bear * 5)
-            # Boost if EMA & MACD fully agree
+            ratio = dominant_w / max(opinionated, 1)
+            edge_ratio = edge_w / max(opinionated, 1)
+            base_conf = int(62 + (ratio * 20) + (edge_ratio * 15) + (confluence_bear * 2))
             if full_bear_ema or (ema9 < ema21 and macd_h < 0):
-                base_conf += 6
-            confidence = min(96, base_conf)
+                base_conf += 4
+            confidence = min(96, max(65, base_conf))
         else:
             confidence = 50
 
@@ -794,25 +811,29 @@ class SignalEngine:
             icon = "BULL" if v.direction == +1 else "BEAR" if v.direction == -1 else "NEUT"
             analysis.append(f"  {icon} [{v.weight}pt] {v.name}: {v.detail}")
 
-        # Signal Output — 65%+ Confidence = UP or DOWN
+        # Signal Output — Strict UP / DOWN / WAIT logic
         if confidence_ok and is_bull:
             signal = SignalAction.buy
             trend  = "Bullish"
             status = "BUY"
-            analysis.insert(0, f"📈 HIGH ACCURACY UP — Bull={bull_weight}pt Bear={bear_weight}pt Conf={confidence}%")
+            analysis.insert(0, f"📈 ACCURATE UP SIGNAL — Bull={bull_weight}pt Bear={bear_weight}pt Edge={edge_w}pt Conf={confidence}%")
         elif confidence_ok and is_bear:
             signal = SignalAction.sell
             trend  = "Bearish"
             status = "SELL"
-            analysis.insert(0, f"📉 HIGH ACCURACY DOWN — Bull={bull_weight}pt Bear={bear_weight}pt Conf={confidence}%")
+            analysis.insert(0, f"📉 ACCURATE DOWN SIGNAL — Bull={bull_weight}pt Bear={bear_weight}pt Edge={edge_w}pt Conf={confidence}%")
         else:
             signal = SignalAction.wait
             trend  = "Sideways"
             status = "WAIT"
-            if not confidence_ok:
-                analysis.insert(0, f"⛔ WAIT — Confidence {confidence}% < 65%")
+            if veto_reason:
+                analysis.insert(0, f"⛔ WAIT (Signal Vetoed) — {veto_reason}")
+            elif edge_w < self.MIN_EDGE_WEIGHT:
+                analysis.insert(0, f"⛔ WAIT — Insufficient edge ({edge_w}pt gap < {self.MIN_EDGE_WEIGHT}pt required)")
+            elif dominant_w < MIN_DOMINANT:
+                analysis.insert(0, f"⛔ WAIT — Weak conviction ({dominant_w}pt < {MIN_DOMINANT}pt required)")
             else:
-                analysis.insert(0, f"⛔ WAIT — Equal Bull/Bear weights ({bull_weight}pt vs {bear_weight}pt)")
+                analysis.insert(0, f"⛔ WAIT — Market sideways or mixed indicators ({bull_weight}pt vs {bear_weight}pt)")
 
         logger.info(
             "Signal pair=%s action=%s conf=%s bull=%s bear=%s",

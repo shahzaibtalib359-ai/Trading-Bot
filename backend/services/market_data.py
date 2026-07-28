@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
 import httpx
@@ -315,26 +315,23 @@ def generate_synthetic_candles(pair: str, limit: int = 160) -> list[Candle]:
         
     # Reset random seed based on current UTC minute so ticks update in real-time
     now_min = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-    
+    random.seed(seed_val + int(now_min.timestamp() / 60))
+
     candles = []
     current_price = base_price
-    
+
     for i in range(limit):
         ts = now_min - timedelta(minutes=(limit - 1 - i))
-        
-        # Seed per-minute for stable history but real-time tick advance
-        random.seed(seed_val + int(ts.timestamp() / 60))
-        
-        change_pct = random.uniform(-0.0008, 0.0008)
-        # 30-minute cyclic wave to ensure technical indicators (RSI, MACD) swing actively
-        trend = 0.0002 * math.sin(ts.timestamp() / 1800.0)
+        change_pct = random.uniform(-0.0007, 0.0007)
+        # 45-minute cyclic wave to ensure technical indicators swing actively between bull & bear
+        trend = 0.00025 * math.sin((i / 45.0) * 2 * math.pi)
         
         open_val = current_price
         close_val = current_price * (1 + change_pct + trend)
         
-        high_val = max(open_val, close_val) * (1 + random.uniform(0, 0.0004))
-        low_val = min(open_val, close_val) * (1 - random.uniform(0, 0.0004))
-        volume_val = random.uniform(50, 450)
+        high_val = max(open_val, close_val) * (1 + random.uniform(0.0001, 0.0005))
+        low_val = min(open_val, close_val) * (1 - random.uniform(0.0001, 0.0005))
+        volume_val = random.uniform(80, 500)
         
         candles.append(
             Candle(
