@@ -50,7 +50,11 @@ def get_settings() -> Settings:
     settings = Settings()
 
     # Vercel filesystem is read-only
-    if os.environ.get("VERCEL") != "1":
+    if os.environ.get("VERCEL") == "1":
+        settings.database_path = Path("/tmp/signals.sqlite3")
+        if settings.firebase_credentials_json:
+            settings.database_type = "firestore"
+    else:
         settings.database_path.parent.mkdir(
             parents=True,
             exist_ok=True
