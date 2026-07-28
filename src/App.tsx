@@ -951,11 +951,11 @@ function IconMessageSquare({ className = '', size = 16, style = {} }: { classNam
 //  DEEP ANALYSIS LOADER
 // ═══════════════════════════════════════════════════════════════════════
 const ANALYSIS_STEPS = [
-  { label: 'Fetching market data (300 candles)…',     ms: 1800 },
-  { label: 'Computing 11 technical indicators…',      ms: 2000 },
-  { label: 'ADX + Market Structure analysis…',        ms: 1800 },
-  { label: 'Running double-pass confirmation…',       ms: 3200 },
-  { label: 'Finalizing signal decision…',             ms: 600  },
+  { label: 'Fetching market data (150 candles)…',      ms: 1200 },
+  { label: 'Computing 11 technical indicators…',       ms: 1400 },
+  { label: 'ADX + Market Structure analysis…',         ms: 1000 },
+  { label: 'Running double-pass confirmation…',        ms: 1800 },
+  { label: 'Finalizing signal decision…',              ms: 400  },
 ]
 
 function DeepLoader() {

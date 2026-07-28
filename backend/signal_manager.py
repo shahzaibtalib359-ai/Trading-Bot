@@ -37,8 +37,8 @@ class SignalManager:
     """
 
     # Seconds to wait between the two analysis passes.
-    # 3 seconds = fresh candle data with minimal market shift = better confirmation.
-    CONFIRMATION_DELAY_SECONDS: float = 3.0
+    # 1.5 seconds = fresh data with fast confirmation = best speed+accuracy balance.
+    CONFIRMATION_DELAY_SECONDS: float = 1.5
 
     def __init__(
         self,
@@ -95,13 +95,13 @@ class SignalManager:
         # ── AGREEMENT CHECK ────────────────────────────────────────────────
         if response1.signal == response2.signal:
             # Both passes agree → confirmed signal
-            # Use the LOWER confidence of the two (conservative estimate)
-            confirmed_confidence = min(response1.confidence, response2.confidence)
+            # Use AVERAGE of both passes (more balanced than minimum)
+            confirmed_confidence = int((response1.confidence + response2.confidence) / 2)
 
             # Build enriched analysis showing both passes agreed
             combined_analysis = [
                 f"✅ DOUBLE-CONFIRMED: Both passes agree — {response2.signal.value}",
-                f"   Pass1 conf={response1.confidence}% | Pass2 conf={response2.confidence}% → final={confirmed_confidence}%",
+                f"   Pass1 conf={response1.confidence}% | Pass2 conf={response2.confidence}% → avg={confirmed_confidence}%",
             ] + response2.analysis
 
             logger.info(
@@ -110,7 +110,7 @@ class SignalManager:
                 confirmed_confidence, response1.confidence, response2.confidence,
             )
 
-            # Return the second-pass response with combined confidence
+            # Return the second-pass response with averaged confidence
             return SignalResponse(
                 mode=response2.mode,
                 pair=response2.pair,
@@ -119,7 +119,7 @@ class SignalManager:
                 confidence=confirmed_confidence,
                 duration=response2.duration,
                 market_trend=response2.market_trend,
-                status=response2.status,
+                status="DOUBLE_CONFIRMED",
                 analysis=combined_analysis[:14],
                 data_source=response2.data_source,
                 data_warning=response2.data_warning,

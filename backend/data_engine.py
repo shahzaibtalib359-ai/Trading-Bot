@@ -25,7 +25,7 @@ class MarketSnapshot:
 class LiveMarketDataEngine:
     """Fetches fresh 1-minute market candles on every request."""
 
-    def __init__(self, candle_builder: CandleBuilder | None = None, history_limit: int = 300) -> None:
+    def __init__(self, candle_builder: CandleBuilder | None = None, history_limit: int = 150) -> None:
         self.candle_builder = candle_builder or CandleBuilder()
         self.history_limit = history_limit
 
