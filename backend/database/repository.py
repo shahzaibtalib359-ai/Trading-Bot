@@ -129,6 +129,7 @@ class SignalRepository:
             connection.executescript(SCHEMA)
         self.seed_admin_config()
         self._run_migrations()
+        self.seed_default_licenses()
 
     def _run_migrations(self) -> None:
         """Run all incremental schema migrations safely."""
@@ -333,6 +334,57 @@ class SignalRepository:
 
     # ── License CRUD ─────────────────────────────────────────────────────
 
+    def seed_default_licenses(self) -> None:
+        """Auto-seed default license keys on every startup if none exist.
+        This ensures the app works on Vercel where SQLite resets between cold starts.
+        """
+        with self.connect() as connection:
+            count = connection.execute("SELECT COUNT(*) FROM licenses").fetchone()[0]
+            if count > 0:
+                return  # Licenses already exist, skip seeding
+
+        # ── Fixed license keys that are always available ───────────────────
+        SEED_LICENSES = [
+            {"key": "SS-AHMAD-MAIN-2026", "owner": "ahmad", "email": "ahmad@gmail.com"},
+            {"key": "SS-DEMO-USER-2026", "owner": "demo", "email": "demo@gmail.com"},
+            {"key": "SS-TEST-USER-2026", "owner": "test", "email": "test@gmail.com"},
+        ]
+
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat()  # 10 years
+        sub_expires = (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat()
+
+        for lic in SEED_LICENSES:
+            try:
+                with self.connect() as connection:
+                    connection.execute(
+                        "INSERT OR IGNORE INTO licenses (key, owner, expires_at, is_active) VALUES (?, ?, ?, 1)",
+                        (lic["key"], lic["owner"], expires_at),
+                    )
+                # Auto-create user account for each license owner
+                with self.connect() as connection:
+                    connection.execute(
+                        """
+                        INSERT OR IGNORE INTO users
+                        (username, email, password_hash, created_at, role, subscription_tier, subscription_expires_at)
+                        VALUES (?, ?, ?, ?, 'user', 'premium', ?)
+                        """,
+                        (
+                            lic["owner"],
+                            lic["email"],
+                            hash_password("trading2026"),
+                            datetime.now(timezone.utc).isoformat(),
+                            sub_expires,
+                        ),
+                    )
+            except Exception as e:
+                print(f"Warning: Could not seed license {lic['key']}: {e}")
+
+        print("=" * 60)
+        print("DEFAULT LICENSES SEEDED:")
+        for lic in SEED_LICENSES:
+            print(f"  Key: {lic['key']}  |  Owner: {lic['owner']}  |  Email: {lic['email']}")
+        print("=" * 60)
+
     def seed_admin_config(self, default_password: str = "07862433") -> None:
         """Seed the admin_config table with a hashed default password and recovery key if missing."""
         with self.connect() as connection:
@@ -469,7 +521,7 @@ class SignalRepository:
     def insert_user(self, username: str, email: str, password_hash: str) -> int:
         created_at = datetime.now(timezone.utc).isoformat()
         # Default subscriptions to 30 days from signup
-        sub_expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        sub_expires = (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat()  # 10 years
         with self.connect() as connection:
             cursor = connection.execute(
                 """
