@@ -228,6 +228,21 @@ class YahooFinanceForexProvider:
                     raise RuntimeError(
                         f"Yahoo Finance returned too few candles for {pair} ({symbol}): {len(candles)}"
                     )
+
+                # Fetch real-time sub-minute tick for the absolute latest price
+                meta = result.get("meta", {})
+                live_price = meta.get("regularMarketPrice")
+                if live_price is not None and candles:
+                    latest = candles[-1]
+                    candles[-1] = Candle(
+                        timestamp=datetime.now(timezone.utc), # Update timestamp to now
+                        open=latest.open,
+                        high=max(latest.high, float(live_price)),
+                        low=min(latest.low, float(live_price)),
+                        close=float(live_price),
+                        volume=latest.volume
+                    )
+
                 logger.info(
                     "Yahoo Finance: fetched %d candles for %s (%s), latest close=%.5f",
                     len(candles), pair, symbol, candles[-1].close,
@@ -313,8 +328,9 @@ def generate_synthetic_candles(pair: str, limit: int = 160) -> list[Candle]:
     elif "NZD" in pair:
         base_price = 0.61
         
-    # Reset random seed based on current UTC minute so ticks update in real-time
-    now_min = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    # Reset random seed based on current UTC minute so historical ticks are stable
+    now = datetime.now(timezone.utc)
+    now_min = now.replace(second=0, microsecond=0)
     random.seed(seed_val + int(now_min.timestamp() / 60))
 
     candles = []
@@ -332,6 +348,16 @@ def generate_synthetic_candles(pair: str, limit: int = 160) -> list[Candle]:
         high_val = max(open_val, close_val) * (1 + random.uniform(0.0001, 0.0005))
         low_val = min(open_val, close_val) * (1 - random.uniform(0.0001, 0.0005))
         volume_val = random.uniform(80, 500)
+        
+        # For the final candle, add sub-minute live tick fluctuations
+        if i == limit - 1:
+            # Re-seed with exact seconds to ensure dynamic tick updates
+            random.seed(seed_val + int(now.timestamp() / 5)) 
+            tick_change = random.uniform(-0.0003, 0.0003)
+            close_val = close_val * (1 + tick_change)
+            high_val = max(high_val, close_val)
+            low_val = min(low_val, close_val)
+            ts = now # set to exact current time
         
         candles.append(
             Candle(
