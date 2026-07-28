@@ -316,7 +316,7 @@ class SignalEngine:
     """
 
     # ── Balanced Thresholds — Good Signals + Reasonable Frequency ──────
-    MIN_CONFIDENCE   = 62   # % confidence — slightly lower for more signals
+    MIN_CONFIDENCE   = 65   # % confidence - 65% threshold requested by user
     MIN_EDGE_WEIGHT  = 3    # minimum 3-point gap between bull & bear (was 5)
     MIN_ADX          = 17   # ADX 17+ = some trend present (was 20)
     MIN_EMA_BULL     = 3    # At least 3/4 EMA conditions must be bullish
@@ -751,96 +751,63 @@ class SignalEngine:
             return False, ""
 
         # ══════════════════════════════════════════════════════════════════
-        #  FINAL DECISION
         # ══════════════════════════════════════════════════════════════════
-        is_bull       = bull_weight > bear_weight
-        is_bear       = bear_weight > bull_weight
-        edge_ok       = edge_w >= self.MIN_EDGE_WEIGHT
+        #  FINAL DECISION — Clean logic based on 65% confidence rule:
+        #  - Confidence < 65%: WAIT
+        #  - Confidence >= 65%: UP (Bullish) or DOWN (Bearish)
+        # ══════════════════════════════════════════════════════════════════
+        is_bull = bull_weight > bear_weight
+        is_bear = bear_weight > bull_weight
         confidence_ok = confidence >= self.MIN_CONFIDENCE
-        adx_ok        = adx_val >= self.MIN_ADX
 
-        # Build analysis lines
         analysis: list[str] = [
-            f"ADX={adx_val:.1f} (+DI={pdi:.1f} -DI={mdi:.1f} gap={di_diff:.1f}) | Trend={'🟢UP' if adx_bull else '🔴DN' if adx_bear else '⚪FLAT'}",
-            f"EMA9={ema9:.5f} EMA21={ema21:.5f} EMA50={ema50:.5f} EMA200={ema200:.5f}",
+            f"ADX={adx_val:.1f} (+DI={pdi:.1f} -DI={mdi:.1f}) | Trend={'UP' if adx_bull else 'DN' if adx_bear else 'FLAT'}",
+            f"RSI={rsi14:.1f} | MACD hist={macd_h:.6f}",
             f"EMA align: bull={ema_bull}/4 bear={ema_bear}/4 | rising={ema_bull_rising}/3 falling={ema_bear_falling}/3",
-            f"RSI={rsi14:.1f} | MACD hist={macd_h:.6f} ({'↑↑' if macd_accel_up else '↑' if macd_rising else '↓↓' if macd_accel_dn else '↓'})",
             f"Stoch %K={sk14:.1f} %D={sd14:.1f} | WR={wr14:.1f} | CCI={cci20:.1f}",
-            f"BB pct={bb_pct:.2f} (width={bb_w:.3f}%) | Vol={'🟢UP' if vol_bias==1 else '🔴DN' if vol_bias==-1 else '⚪N'}",
-            f"Structure long={'↑' if ms_long==1 else '↓' if ms_long==-1 else '→'} mid={'↑' if ms_mid==1 else '↓' if ms_mid==-1 else '→'} short={'↑' if ms_short==1 else '↓' if ms_short==-1 else '→'}",
-            f"MTF momentum: bull={mtf_bull}/3 bear={mtf_bear}/3 | slope3={slope3:.4f}% slope7={slope7:.4f}%",
-            f"Candles: bull5={bull_c5}/5 bull3={bull_c3}/3 | bear5={bear_c5}/5 bear3={bear_c3}/3",
-            f"Votes: Bull={bull_weight}pt Bear={bear_weight}pt Edge={edge_w}pt conf={confidence}%",
+            f"BB pct={bb_pct:.2f} | Vol={'UP' if vol_bias==1 else 'DN' if vol_bias==-1 else 'N'}",
+            f"Structure: long={'UP' if ms_long==1 else 'DN' if ms_long==-1 else 'FLAT'} mid={'UP' if ms_mid==1 else 'DN' if ms_mid==-1 else 'FLAT'}",
+            f"Votes: Bull={bull_weight}pt Bear={bear_weight}pt Edge={edge_w}pt Conf={confidence}%",
         ]
 
         for v in votes:
-            icon = "🟢" if v.direction == +1 else "🔴" if v.direction == -1 else "⚪"
+            icon = "BULL" if v.direction == +1 else "BEAR" if v.direction == -1 else "NEUT"
             analysis.append(f"  {icon} [{v.weight}pt] {v.name}: {v.detail}")
 
-        # ── BULL SIGNAL CHECK ─────────────────────────────────────────────
-        if is_bull and confidence_ok and edge_ok and adx_ok:
-            # Check momentum alignment
-            momentum_bull = (recent_bull or mtf_momentum_bull) and (slope7 >= 0.0)
-            if not momentum_bull:
-                signal = SignalAction.wait
-                trend  = "Sideways"
-                status = "WAIT"
-                analysis.insert(0, f"⛔ WAIT — bull momentum not aligned (MTF={mtf_bull}/3 slope7={slope7:.4f}%)")
-            else:
-                # Check contradiction veto
-                vetoed, veto_reason = _is_vetoed_bull()
-                if vetoed:
-                    signal = SignalAction.wait
-                    trend  = "Sideways"
-                    status = "WAIT"
-                    analysis.insert(0, f"⛔ WAIT — Bull VETOED: {veto_reason}")
-                else:
-                    signal = SignalAction.buy
-                    trend  = "Bullish"
-                    status = "BUY"
-                    analysis.insert(0, f"📈 SIGNAL UP — bull={bull_weight}pt bear={bear_weight}pt edge={edge_w}pt conf={confidence}% ADX={adx_val:.0f}")
-
-        # ── BEAR SIGNAL CHECK ─────────────────────────────────────────────
-        elif is_bear and confidence_ok and edge_ok and adx_ok:
-            momentum_bear = (recent_bear or mtf_momentum_bear) and (slope7 <= 0.0)
-            if not momentum_bear:
-                signal = SignalAction.wait
-                trend  = "Sideways"
-                status = "WAIT"
-                analysis.insert(0, f"⛔ WAIT — bear momentum not aligned (MTF={mtf_bear}/3 slope7={slope7:.4f}%)")
-            else:
-                vetoed, veto_reason = _is_vetoed_bear()
-                if vetoed:
-                    signal = SignalAction.wait
-                    trend  = "Sideways"
-                    status = "WAIT"
-                    analysis.insert(0, f"⛔ WAIT — Bear VETOED: {veto_reason}")
-                else:
-                    signal = SignalAction.sell
-                    trend  = "Bearish"
-                    status = "SELL"
-                    analysis.insert(0, f"📉 SIGNAL DOWN — bull={bull_weight}pt bear={bear_weight}pt edge={edge_w}pt conf={confidence}% ADX={adx_val:.0f}")
-
-        # ── NO SIGNAL ────────────────────────────────────────────────────
+        if confidence_ok and is_bull:
+            signal = SignalAction.buy
+            trend  = "Bullish"
+            status = "BUY"
+            analysis.insert(0, f"📈 SIGNAL UP — Bull={bull_weight}pt Bear={bear_weight}pt Conf={confidence}%")
+        elif confidence_ok and is_bear:
+            signal = SignalAction.sell
+            trend  = "Bearish"
+            status = "SELL"
+            analysis.insert(0, f"📉 SIGNAL DOWN — Bull={bull_weight}pt Bear={bear_weight}pt Conf={confidence}%")
         else:
             signal = SignalAction.wait
             trend  = "Sideways"
             status = "WAIT"
-            reasons: list[str] = []
             if not confidence_ok:
-                reasons.append(f"conf {confidence}% < {self.MIN_CONFIDENCE}%")
-            if not edge_ok:
-                reasons.append(f"edge {edge_w}pt < {self.MIN_EDGE_WEIGHT}pt")
-            if not adx_ok:
-                reasons.append(f"ADX {adx_val:.0f} < {self.MIN_ADX} (choppy)")
-            if not is_bull and not is_bear:
-                reasons.append("votes split — no clear direction")
-            analysis.insert(0, f"⛔ WAIT — {' | '.join(reasons) or 'market unclear'}")
+                analysis.insert(0, f"⛔ WAIT — Confidence {confidence}% < 65%")
+            else:
+                analysis.insert(0, f"⛔ WAIT — Equal Bull/Bear weights ({bull_weight}pt vs {bear_weight}pt)")
 
         logger.info(
-            "UltraSignal pair=%s action=%s conf=%s bull=%s bear=%s edge=%s adx=%.1f MTFbull=%s MTFbear=%s",
-            request.pair, signal.value, confidence,
-            bull_weight, bear_weight, edge_w, adx_val, mtf_bull, mtf_bear,
+            "Signal pair=%s action=%s conf=%s bull=%s bear=%s",
+            request.pair, signal.value, confidence, bull_weight, bear_weight,
+        )
+
+        return SignalResponse(
+            mode=request.mode,
+            pair=request.pair,
+            current_price=round(latest, 5),
+            signal=signal,
+            confidence=confidence,
+            duration=request.duration,
+            market_trend=trend,
+            status=status,
+            analysis=analysis[:15],
         )
 
         return SignalResponse(
