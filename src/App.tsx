@@ -332,9 +332,11 @@ function LoginScreen({ onUserLogin, onAdminLogin }: {
           })
         }, 800)
       } else if (data.status === 'expired') {
-        setError('License Expired. Please renew your license.')
+        setError('⏰ License Expired. Please contact admin to renew your license.')
+      } else if (data.status === 'suspended') {
+        setError('🚨 Security Violation Detected! Your account has been SUSPENDED due to unauthorized device or Gmail usage. Contact admin immediately.')
       } else if (data.status === 'device_mismatch') {
-        setError(data.message || 'License binding failed. Mismatched device or Gmail.')
+        setError('🔒 ' + (data.message || 'License is already bound to another device or Gmail.'))
       } else {
         setError(data.message || 'Invalid License Key.')
       }

@@ -1170,12 +1170,9 @@ async def verify_license(
 ) -> LicenseVerifyResponse:
     """
     Verify a license key with device and email binding.
-    - If valid and no device registered: bind this device, bind first email, auto-login.
-    - If valid and same device/email: auto-login.
-    - If valid but different device: reject with 'device_mismatch' and log alert.
-    - If valid but different email: reject with mismatch and log alert.
-    - If expired: return 'expired'.
-    - If invalid: return 'invalid'.
+    - First use: bind device + email, auto-login.
+    - Same device + email: auto-login.
+    - Different device OR different email: SUSPEND account + DISABLE license + alert admin.
     """
     lic = repository.get_license_by_key(body.license_key.strip())
     if lic is None:
@@ -1187,7 +1184,7 @@ async def verify_license(
     if not lic.get("is_active"):
         return LicenseVerifyResponse(
             status="invalid",
-            message="This license key has been disabled.",
+            message="This license has been disabled by admin.",
         )
 
     # Check expiration
@@ -1202,43 +1199,80 @@ async def verify_license(
                 expires_at=lic["expires_at"],
             )
 
-    # Check device binding
+    owner = lic["owner"]
     existing_device = lic.get("device_id")
+
+    # ── DEVICE MISMATCH — suspend everything ──────────────────────────
     if existing_device and existing_device != body.device_id:
+        # Find user to suspend
+        offender = repository.get_user_by_username(owner)
+        if offender:
+            repository.update_user_status(offender["id"], 0)  # suspend
+        # Disable the license key too
+        repository.update_license_status(body.license_key.strip(), 0)
+
+        alert_detail = (
+            f"🚨 SECURITY BREACH — Device Mismatch Detected!\n"
+            f"License Owner: {owner}\n"
+            f"Registered Device: {existing_device}\n"
+            f"Unauthorized Device: {body.device_id}\n"
+            f"Attempted Gmail: {body.email or 'N/A'}\n"
+            f"Action Taken: Account SUSPENDED + License DISABLED automatically."
+        )
         repository.insert_security_alert(
-            username=lic["owner"],
+            username=owner,
             email=body.email or "unregistered@gmail.com",
             license_key=body.license_key.strip(),
             device_id=body.device_id,
-            alert_type="DEVICE_MISMATCH",
-            details=f"Attempted license activation from unauthorized device '{body.device_id}'. Registered device: '{existing_device}'."
+            alert_type="DEVICE_MISMATCH_SUSPENDED",
+            details=alert_detail,
         )
+        logger.warning("DEVICE_MISMATCH: user '%s' suspended + license disabled.", owner)
         return LicenseVerifyResponse(
-            status="device_mismatch",
-            message="This License is already activated on another device.",
+            status="suspended",
+            message="Security violation detected. Your account has been suspended. Contact admin.",
         )
 
-    # Find user to check email binding
-    owner = lic["owner"]
+    # ── Find user for email binding check ─────────────────────────────
     user = repository.get_user_by_username(owner)
 
-    if user is not None:
-        # Check email binding
-        if body.email and user["email"].strip().lower() != body.email.strip().lower():
+    # ── EMAIL MISMATCH — suspend everything ───────────────────────────
+    if user is not None and body.email:
+        registered_email = user["email"].strip().lower()
+        attempted_email = body.email.strip().lower()
+        # Ignore auto-generated @license.local placeholder emails
+        if (
+            registered_email != attempted_email
+            and not registered_email.endswith("@license.local")
+        ):
+            # Suspend user account
+            repository.update_user_status(user["id"], 0)
+            # Disable license key
+            repository.update_license_status(body.license_key.strip(), 0)
+
+            alert_detail = (
+                f"🚨 SECURITY BREACH — Gmail Mismatch Detected!\n"
+                f"License Owner: {owner}\n"
+                f"Registered Gmail: {user['email']}\n"
+                f"Unauthorized Gmail: {body.email}\n"
+                f"Device: {body.device_id}\n"
+                f"Action Taken: Account SUSPENDED + License DISABLED automatically."
+            )
             repository.insert_security_alert(
                 username=owner,
                 email=body.email,
                 license_key=body.license_key.strip(),
                 device_id=body.device_id,
-                alert_type="EMAIL_MISMATCH",
-                details=f"Attempted license access using unauthorized Gmail '{body.email}'. Registered Gmail: '{user['email']}'."
+                alert_type="EMAIL_MISMATCH_SUSPENDED",
+                details=alert_detail,
             )
+            logger.warning("EMAIL_MISMATCH: user '%s' suspended + license disabled.", owner)
             return LicenseVerifyResponse(
-                status="device_mismatch",
-                message="This Gmail is not authorized for this license key. Please contact admin.",
+                status="suspended",
+                message="Security violation: unauthorized Gmail used. Account suspended. Contact admin.",
             )
 
-    # Bind device if not yet bound
+    # ── Bind device on first use ───────────────────────────────────────
     if not existing_device:
         repository.activate_license(
             body.license_key.strip(),
@@ -1246,10 +1280,10 @@ async def verify_license(
             app_version="web-1.0",
         )
 
-    # Update activity
+    # Update activity timestamp
     repository.update_license_activity(body.license_key.strip())
 
-    # Create user if it doesn't exist
+    # ── Auto-create user if missing ────────────────────────────────────
     if user is None:
         pw_hash = hash_password(secrets.token_hex(16))
         bind_email = body.email.strip() if body.email else f"{owner.lower().replace(' ', '_')}@license.local"
@@ -1260,7 +1294,14 @@ async def verify_license(
         )
         user = repository.get_user_by_id(uid)
 
-    # Create session
+    # ── Check if account was suspended by admin ────────────────────────
+    if not user.get("is_active"):
+        return LicenseVerifyResponse(
+            status="suspended",
+            message="Your account has been suspended. Please contact admin.",
+        )
+
+    # ── Create session ─────────────────────────────────────────────────
     token = secrets.token_urlsafe(32)
     _user_sessions[token] = (user["id"], datetime.now(timezone.utc))
     _mark_user_online(user["id"])
