@@ -1049,6 +1049,43 @@ async def admin_delete_license(
     return {"status": "success", "message": "License deleted."}
 
 
+class RenewLicenseRequest(BaseModel):
+    days: int = 365  # extend by this many days from today
+
+
+@router.patch("/admin/licenses/{key}/renew")
+async def admin_renew_license(
+    key: str,
+    body: RenewLicenseRequest,
+    repository: SignalRepository = Depends(get_repository),
+    _admin: str = Depends(verify_admin_token),
+) -> dict:
+    """Admin renews (extends) a license by N days from today. No new key generated."""
+    lic = repository.get_license_by_key(key)
+    if lic is None:
+        raise HTTPException(status_code=404, detail="License key not found.")
+
+    days = max(1, body.days)
+    new_expires_at = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+
+    try:
+        repository.extend_license(key, new_expires_at)
+    except Exception as exc:
+        logger.exception("Failed to renew license '%s': %s", key, exc)
+        raise HTTPException(status_code=500, detail=f"Failed to renew license: {exc}") from exc
+
+    # Re-enable if it was disabled
+    repository.update_license_status(key, 1)
+
+    logger.info("License '%s' renewed for %d days. New expiry: %s", key, days, new_expires_at)
+    return {
+        "key": key,
+        "expires_at": new_expires_at,
+        "is_active": True,
+        "message": f"License renewed for {days} days. New expiry: {new_expires_at[:10]}",
+    }
+
+
 # ── Admin user signal history ─────────────────────────────────────────
 
 

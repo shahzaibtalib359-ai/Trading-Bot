@@ -1758,6 +1758,12 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
   const [changePasswordError, setChangePasswordError] = useState('')
   const [changePasswordSuccess, setChangePasswordSuccess] = useState('')
 
+  // Renew state: which key is being renewed and how many days
+  const [renewKey, setRenewKey] = useState<string | null>(null)
+  const [renewDays, setRenewDays] = useState('365')
+  const [renewLoading, setRenewLoading] = useState(false)
+  const [renewMsg, setRenewMsg] = useState<string | null>(null)
+
   const headers = useCallback(() => ({ 'x-admin-token': adminSession.token, 'Content-Type': 'application/json' }), [adminSession])
 
   const loadAll = useCallback(async () => {
@@ -1843,6 +1849,30 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
       body: JSON.stringify({ is_active: !active }),
     })
     loadAll()
+  }
+
+  const renewLicense = async (key: string) => {
+    const days = parseInt(renewDays) || 365
+    setRenewLoading(true); setRenewMsg(null)
+    try {
+      const res = await fetch(`${API}/admin/licenses/${encodeURIComponent(key)}/renew`, {
+        method: 'PATCH',
+        headers: headers(),
+        body: JSON.stringify({ days }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setRenewMsg(`✅ ${data.message}`)
+        setRenewKey(null)
+        loadAll()
+      } else {
+        const err = await res.json()
+        setRenewMsg(`❌ ${err.detail || 'Renew failed'}`)
+      }
+    } catch {
+      setRenewMsg('❌ Connection failed')
+    }
+    setRenewLoading(false)
   }
 
   const changePassword = async () => {
@@ -2098,45 +2128,99 @@ function AdminPage({ adminSession }: { adminSession: AdminSession }) {
               <div className="empty-state-text">No licenses created yet</div>
             </div>
           ) : (
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>Key</th>
-                  <th>Owner</th>
-                  <th>Device</th>
-                  <th>Expires</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {licenses.map(l => {
-                  const isExpired = l.expires_at ? new Date(l.expires_at) <= new Date() : false
-                  return (
-                    <tr key={l.id}>
-                      <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{l.key}</td>
-                      <td style={{ fontWeight: 600 }}>{l.owner}</td>
-                      <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.device_id ? l.device_id.slice(0, 12) + '…' : '—'}</td>
-                      <td>{fmtDate(l.expires_at)}</td>
-                      <td>
-                        {isExpired
-                          ? <><span className="status-dot expired" /> Expired</>
-                          : l.is_active
-                            ? <><span className="status-dot active" /> Active</>
-                            : <><span className="status-dot inactive" /> Disabled</>
-                        }
-                      </td>
-                      <td style={{ display: 'flex', gap: 6 }}>
-                        <button className={`admin-btn ${l.is_active ? 'danger' : 'success'}`} onClick={() => toggleLicense(l.key, !!l.is_active)}>
-                          {l.is_active ? 'Disable' : 'Enable'}
-                        </button>
-                        <button className="admin-btn danger" onClick={() => deleteLicense(l.key)}>Delete</button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <>
+              {renewMsg && (
+                <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  background: renewMsg.startsWith('✅') ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                  color: renewMsg.startsWith('✅') ? 'var(--accent-green)' : 'var(--accent-red)',
+                  border: `1px solid ${renewMsg.startsWith('✅') ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
+                  {renewMsg}
+                </div>
+              )}
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Owner</th>
+                    <th>Gmail / Email</th>
+                    <th>Device</th>
+                    <th>Expires</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {licenses.map(l => {
+                    const isExpired = l.expires_at ? new Date(l.expires_at) <= new Date() : false
+                    // Find matching user email
+                    const matchedUser = users.find(u => u.username.toLowerCase() === l.owner.toLowerCase())
+                    const userEmail = matchedUser?.email ?? '—'
+                    return (
+                      <tr key={l.id}>
+                        <td style={{ fontFamily: 'monospace', fontSize: 11 }}>
+                          <span title={l.key}>{l.key}</span>
+                        </td>
+                        <td style={{ fontWeight: 700 }}>{l.owner}</td>
+                        <td style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{userEmail}</td>
+                        <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.device_id ? l.device_id.slice(0, 12) + '…' : '—'}</td>
+                        <td style={{ fontSize: 12, color: isExpired ? 'var(--accent-red)' : 'var(--accent-green)', fontWeight: 600 }}>
+                          {fmtDate(l.expires_at)}
+                        </td>
+                        <td>
+                          {isExpired
+                            ? <><span className="status-dot expired" /> Expired</>
+                            : l.is_active
+                              ? <><span className="status-dot active" /> Active</>
+                              : <><span className="status-dot inactive" /> Disabled</>
+                          }
+                        </td>
+                        <td>
+                          {/* Renew inline */}
+                          {renewKey === l.key ? (
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <select
+                                value={renewDays}
+                                onChange={e => setRenewDays(e.target.value)}
+                                style={{ fontSize: 11, padding: '3px 6px', borderRadius: 6, background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                              >
+                                <option value="30">30 days</option>
+                                <option value="90">90 days</option>
+                                <option value="180">180 days</option>
+                                <option value="365">365 days</option>
+                                <option value="730">2 years</option>
+                              </select>
+                              <button className="admin-btn success" style={{ fontSize: 11, padding: '3px 8px' }}
+                                onClick={() => renewLicense(l.key)} disabled={renewLoading}>
+                                {renewLoading ? '…' : '✓ Confirm'}
+                              </button>
+                              <button className="admin-btn" style={{ fontSize: 11, padding: '3px 8px' }}
+                                onClick={() => { setRenewKey(null); setRenewMsg(null) }}>✕</button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              <button
+                                className="admin-btn primary"
+                                style={{ fontSize: 11, padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                onClick={() => { setRenewKey(l.key); setRenewDays('365'); setRenewMsg(null) }}
+                              >
+                                🔄 Renew
+                              </button>
+                              <button className={`admin-btn ${l.is_active ? 'danger' : 'success'}`}
+                                style={{ fontSize: 11, padding: '3px 8px' }}
+                                onClick={() => toggleLicense(l.key, !!l.is_active)}>
+                                {l.is_active ? 'Disable' : 'Enable'}
+                              </button>
+                              <button className="admin-btn danger" style={{ fontSize: 11, padding: '3px 8px' }}
+                                onClick={() => deleteLicense(l.key)}>Del</button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </>
           )}
         </div>
       )}
