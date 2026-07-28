@@ -47,22 +47,25 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    # ── Vercel: inject env vars BEFORE Settings() is constructed ─────
+    # Vercel filesystem is read-only except /tmp.
+    # We set env vars here so Pydantic picks them up naturally — no mutation needed.
+    if os.environ.get("VERCEL") == "1":
+        if "TRADING_DATABASE_PATH" not in os.environ:
+            os.environ["TRADING_DATABASE_PATH"] = "/tmp/signals.sqlite3"
+        # Auto-switch to Firestore if Firebase credentials JSON is provided
+        if (
+            os.environ.get("TRADING_FIREBASE_CREDENTIALS_JSON")
+            and "TRADING_DATABASE_TYPE" not in os.environ
+        ):
+            os.environ["TRADING_DATABASE_TYPE"] = "firestore"
+    # ────────────────────────────────────────────────────────────────
+
     settings = Settings()
 
-    # Vercel filesystem is read-only
-    if os.environ.get("VERCEL") == "1":
-        settings.database_path = Path("/tmp/signals.sqlite3")
-        if settings.firebase_credentials_json:
-            settings.database_type = "firestore"
-    else:
-        settings.database_path.parent.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-        settings.log_path.parent.mkdir(
-            parents=True,
-            exist_ok=True
-        )
+    # Local dev: create directories if they don't exist
+    if os.environ.get("VERCEL") != "1":
+        settings.database_path.parent.mkdir(parents=True, exist_ok=True)
+        settings.log_path.parent.mkdir(parents=True, exist_ok=True)
 
     return settings
