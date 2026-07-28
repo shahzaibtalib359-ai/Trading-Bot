@@ -706,30 +706,34 @@ class SignalEngine:
         #  LAYER 5 — CONTRADICTION VETO CHECK (EXTREME REVERSAL BOUNDS)
         # ══════════════════════════════════════════════════════════════════
         def _is_vetoed_bull() -> tuple[bool, str]:
-            """Check if bullish signal has extreme overbought contradictions."""
-            if rsi14 > 82:
-                return True, f"RSI={rsi14:.1f} extreme overbought (>82)"
-            if sk14 > 90 and sd14 > 88:
+            """Check if bullish signal has extreme overbought contradictions or fake breakout."""
+            if rsi14 > 80:
+                return True, f"RSI={rsi14:.1f} extreme overbought (>80)"
+            if sk14 > 85 and sd14 > 85:
                 return True, f"Stochastic={sk14:.1f} extreme overbought"
             if bb_pct > 0.96:
                 return True, f"BB={bb_pct:.2f} price at upper band limit"
+            if adx_val < 18 and (not adx_clear):
+                return True, f"ADX={adx_val:.1f} extremely choppy market (fake UP breakout)"
             return False, ""
 
         def _is_vetoed_bear() -> tuple[bool, str]:
-            """Check if bearish signal has extreme oversold contradictions."""
-            if rsi14 < 18:
-                return True, f"RSI={rsi14:.1f} extreme oversold (<18)"
-            if sk14 < 10 and sd14 < 12:
+            """Check if bearish signal has extreme oversold contradictions or fake breakout."""
+            if rsi14 < 20:
+                return True, f"RSI={rsi14:.1f} extreme oversold (<20)"
+            if sk14 < 15 and sd14 < 15:
                 return True, f"Stochastic={sk14:.1f} extreme oversold"
             if bb_pct < 0.04:
                 return True, f"BB={bb_pct:.2f} price at lower band limit"
+            if adx_val < 18 and (not adx_clear):
+                return True, f"ADX={adx_val:.1f} extremely choppy market (fake DOWN breakout)"
             return False, ""
 
         # ══════════════════════════════════════════════════════════════════
         #  FINAL DECISION — ACCURATE MARKET ANALYSIS & DYNAMIC SIGNALS
         # ══════════════════════════════════════════════════════════════════
-        MIN_EDGE = 1      # Minimum 1-point gap between bull and bear
-        MIN_DOMINANT = 3  # Minimum 3 points for dominant direction
+        MIN_EDGE = 2      # Minimum 2-point gap between bull and bear
+        MIN_DOMINANT = 4  # Minimum 4 points for dominant direction
         
         has_bull_edge = (bull_weight > bear_weight) and (edge_w >= MIN_EDGE) and (bull_weight >= MIN_DOMINANT)
         has_bear_edge = (bear_weight > bull_weight) and (edge_w >= MIN_EDGE) and (bear_weight >= MIN_DOMINANT)
