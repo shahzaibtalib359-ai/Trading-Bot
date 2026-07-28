@@ -13,7 +13,8 @@
   "dependencies": {
     "firebase": "^12.16.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react-dom": "^19.2.6",
+    "tinyglobby": "^0.2.17"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -29,6 +30,6 @@
     "playwright": "^1.60.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
-    "vite": "^6.1.0"
+    "vite": "^8.1.5"
   }
 }
