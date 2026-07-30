@@ -258,17 +258,19 @@ class YahooFinanceForexProvider:
 
 
 # Forex pairs → Binance USDT equivalents (trade 24/7, correlated to forex prices, 100% real-time 0-delay)
-# ONLY include direct equivalents that exist on Binance spot. JPY, CAD, CHF crosses etc. must use Yahoo Finance.
+# ONLY include direct equivalents that exist on Binance spot.
+# NOTE: NZDUSDT does NOT exist on Binance — NZD/USD uses Yahoo Finance fallback.
+# NOTE: JPY, CAD, CHF crosses must use Yahoo Finance (no direct USDT pair on Binance).
 _FOREX_OTC_BINANCE_MAP: dict[str, str] = {
-    # USD pairs — direct Binance equivalents
+    # USD pairs — verified to exist on Binance spot
     "EUR/USD OTC": "EURUSDT",
     "GBP/USD OTC": "GBPUSDT",
     "AUD/USD OTC": "AUDUSDT",
-    "NZD/USD OTC": "NZDUSDT",
+    # NZD/USD OTC → REMOVED (NZDUSDT does not exist on Binance → Yahoo Finance fallback)
     "EUR/USD":     "EURUSDT",
     "GBP/USD":     "GBPUSDT",
     "AUD/USD":     "AUDUSDT",
-    "NZD/USD":     "NZDUSDT",
+    # NZD/USD → REMOVED (no Binance pair) → Yahoo Finance fallback
 }
 
 

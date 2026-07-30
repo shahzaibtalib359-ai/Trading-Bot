@@ -1071,6 +1071,12 @@ function SignalsPage({ session, adminSession }: { session: LicenseSession | null
   const [result, setResult] = useState<SignalResponse | null>(null)
   const [error, setError] = useState('')
 
+  // ── Best Pair Finder state ──────────────────────────────────────────
+  const [finding, setFinding] = useState(false)
+  const [bestPairResult, setBestPairResult] = useState<SignalResponse | null>(null)
+  const [bestPairError, setBestPairError] = useState('')
+  const [scanProgress, setScanProgress] = useState('')
+
   const getMode = (t: MarketTab) => {
     if (t === 'quotex') return 'Quotex'
     if (t === 'forex') return 'Forex'
@@ -1116,9 +1122,76 @@ function SignalsPage({ session, adminSession }: { session: LicenseSession | null
 
   const handleMarketTypeChange = (t: MarketTab) => {
     setMarketType(t)
+    setBestPairResult(null)
+    setBestPairError('')
     if (t === 'quotex') setPair(QUOTEX_PAIRS[0])
     else if (t === 'forex') setPair(FOREX_PAIRS[0])
     else setPair(CRYPTO_PAIRS[0])
+  }
+
+  // ── Best Pair Finder — scans all pairs & picks highest confidence signal ──
+  const handleFindBestPair = async () => {
+    setFinding(true); setBestPairError(''); setBestPairResult(null); setResult(null); setError('')
+    const mode = getMode(marketType)
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+
+    // Choose the correct scan endpoint
+    let scanUrl = ''
+    if (adminSession) {
+      headers['x-admin-token'] = adminSession.token
+      if (marketType === 'quotex') {
+        scanUrl = `${API}/admin/signal/scan-quotex?duration=${encodeURIComponent(duration)}`
+      } else {
+        scanUrl = `${API}/admin/signal/scan?mode=${mode}&duration=${encodeURIComponent(duration)}`
+      }
+    } else if (session) {
+      headers['x-user-token'] = session.token
+      if (marketType === 'quotex') {
+        scanUrl = `${API}/signals/scan-quotex?duration=${encodeURIComponent(duration)}`
+      } else {
+        scanUrl = `${API}/signals/scan?mode=${mode}&duration=${encodeURIComponent(duration)}`
+      }
+    } else {
+      setBestPairError('Login required to scan pairs.')
+      setFinding(false)
+      return
+    }
+
+    try {
+      setScanProgress(marketType === 'quotex' ? 'Scanning all Quotex OTC pairs...' : marketType === 'forex' ? 'Scanning all Forex pairs...' : 'Scanning all Crypto pairs...')
+      const res = await fetch(scanUrl, { headers })
+      if (!res.ok) {
+        const err = await res.json()
+        setBestPairError(err.detail || 'Scan failed. Try again.')
+        setFinding(false)
+        return
+      }
+      const allResults: SignalResponse[] = await res.json()
+      // Filter only UP/DOWN signals with 75%+ confidence
+      const actionable = allResults
+        .filter(r => r.signal !== 'WAIT' && r.status !== 'MARKET_CLOSED' && r.confidence >= 75)
+        .sort((a, b) => b.confidence - a.confidence)
+
+      if (actionable.length === 0) {
+        // No strong signal — show the best WAIT signal found
+        const bestWait = allResults.sort((a, b) => b.confidence - a.confidence)[0]
+        if (bestWait) {
+          setBestPairResult({ ...bestWait, signal: 'WAIT' })
+          setBestPairError('⏳ Abhi koi strong signal nahi — market sideways hai. Thoda wait karo phir dobara scan karo.')
+        } else {
+          setBestPairError('Koi signal nahi mila. Backend check karo.')
+        }
+      } else {
+        const best = actionable[0]
+        setBestPairResult(best)
+        // Auto-select this pair in the dropdown
+        setPair(best.pair)
+      }
+    } catch {
+      setBestPairError('Connection failed. Backend chal raha hai?')
+    }
+    setScanProgress('')
+    setFinding(false)
   }
 
   const activePairs =
@@ -1129,7 +1202,7 @@ function SignalsPage({ session, adminSession }: { session: LicenseSession | null
     <div>
       <div className="page-header">
         <h1 className="page-title">Generate Signal</h1>
-        <p className="page-subtitle">Deep market analysis · 11 indicators · Double-pass confirmed</p>
+        <p className="page-subtitle">Deep market analysis · 11 indicators · Ultra-accurate signals</p>
       </div>
 
       {/* Market Type Tabs */}
@@ -1151,6 +1224,155 @@ function SignalsPage({ session, adminSession }: { session: LicenseSession | null
         </button>
       </div>
 
+      {/* ── BEST PAIR FINDER BUTTON ─────────────────────────────────────── */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(59,130,246,0.08))',
+        border: '1px solid rgba(139,92,246,0.25)',
+        borderRadius: 16,
+        padding: '16px 20px',
+        marginBottom: 20,
+        display: 'flex',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 14,
+      }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--accent-purple)', letterSpacing: 0.3 }}>
+            🔥 Auto Best Pair Finder
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+            {marketType === 'quotex' && 'Sare Quotex OTC pairs scan karo — sabse best pair auto select ho ga'}
+            {marketType === 'forex'  && 'Sare Forex pairs scan karo — sabse high confidence pair dhundo'}
+            {marketType === 'crypto' && 'Sare Crypto pairs scan karo — sabse strong signal pair dhundo'}
+          </div>
+        </div>
+        <button
+          onClick={handleFindBestPair}
+          disabled={finding || generating}
+          style={{
+            background: finding ? 'rgba(139,92,246,0.2)' : 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+            color: 'white',
+            border: 'none',
+            borderRadius: 12,
+            padding: '10px 20px',
+            fontWeight: 800,
+            fontSize: 13,
+            cursor: finding ? 'wait' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            boxShadow: finding ? 'none' : '0 4px 15px rgba(124,58,237,0.35)',
+            transition: 'all 0.2s',
+            minWidth: 200,
+            justifyContent: 'center',
+          }}
+        >
+          {finding ? (
+            <><span className="spinner" /> {scanProgress || 'Scanning...'}</>
+          ) : (
+            <><IconActivity size={15} /> 🔥 Find Best Pair Now</>
+          )}
+        </button>
+      </div>
+
+      {/* Best Pair Result Card */}
+      {bestPairResult && bestPairResult.signal !== 'WAIT' && (
+        <div style={{
+          background: bestPairResult.signal === 'UP'
+            ? 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(16,185,129,0.04))'
+            : 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.04))',
+          border: bestPairResult.signal === 'UP'
+            ? '2px solid rgba(16,185,129,0.5)'
+            : '2px solid rgba(239,68,68,0.5)',
+          borderRadius: 20,
+          padding: '22px 24px',
+          marginBottom: 20,
+          boxShadow: bestPairResult.signal === 'UP'
+            ? '0 8px 40px rgba(16,185,129,0.15)'
+            : '0 8px 40px rgba(239,68,68,0.15)',
+          animation: 'pulse-glow 2s infinite',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: '50%',
+              background: bestPairResult.signal === 'UP' ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: bestPairResult.signal === 'UP' ? 'var(--accent-green)' : 'var(--accent-red)',
+              flexShrink: 0, fontSize: 28,
+            }}>
+              {bestPairResult.signal === 'UP' ? '📈' : '📉'}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase',
+                color: bestPairResult.signal === 'UP' ? 'var(--accent-green)' : 'var(--accent-red)', marginBottom: 4 }}>
+                🏆 BEST PAIR ABHI TRADE KARO
+              </div>
+              <div style={{ fontSize: 28, fontWeight: 900,
+                color: bestPairResult.signal === 'UP' ? 'var(--accent-green)' : 'var(--accent-red)',
+                letterSpacing: -0.5 }}>
+                {bestPairResult.pair}
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{
+                  background: bestPairResult.signal === 'UP' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                  color: bestPairResult.signal === 'UP' ? 'var(--accent-green)' : 'var(--accent-red)',
+                  border: `1px solid ${bestPairResult.signal === 'UP' ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`,
+                  borderRadius: 8, padding: '4px 12px', fontSize: 14, fontWeight: 800,
+                }}>
+                  {bestPairResult.signal === 'UP' ? '⬆️ BUY / CALL' : '⬇️ SELL / PUT'}
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>
+                  Confidence: <strong style={{ color: bestPairResult.confidence >= 85 ? 'var(--accent-green)' : 'var(--accent-amber)' }}>{bestPairResult.confidence}%</strong>
+                </span>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>
+                  Price: <strong style={{ fontFamily: 'monospace' }}>{bestPairResult.current_price?.toFixed(5)}</strong>
+                </span>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <button
+                onClick={() => { setPair(bestPairResult.pair); handleGenerate() }}
+                style={{
+                  background: bestPairResult.signal === 'UP'
+                    ? 'linear-gradient(135deg, #10b981, #059669)'
+                    : 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  color: 'white', border: 'none', borderRadius: 12,
+                  padding: '12px 22px', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+                  boxShadow: bestPairResult.signal === 'UP'
+                    ? '0 4px 15px rgba(16,185,129,0.4)' : '0 4px 15px rgba(239,68,68,0.4)',
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                }}
+              >
+                <IconActivity size={16} />
+                Full Analysis Lo
+              </button>
+            </div>
+          </div>
+
+          {/* Candle timing from analysis */}
+          {bestPairResult.analysis && bestPairResult.analysis.length > 1 && (
+            <div style={{
+              marginTop: 16, padding: '10px 14px',
+              background: 'rgba(0,0,0,0.2)', borderRadius: 10,
+              fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600,
+            }}>
+              ⏱️ {bestPairResult.analysis[1]?.replace(/[⚡⏳]/g, '').trim()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {bestPairError && (
+        <div style={{
+          background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)',
+          borderRadius: 12, padding: '12px 16px', marginBottom: 16,
+          fontSize: 13, color: 'var(--accent-amber)', fontWeight: 600,
+        }}>
+          {bestPairError}
+        </div>
+      )}
+
+      {/* Manual signal controls */}
       <div className="signal-controls">
         <div className="control-group">
           <span className="control-label">Trading Pair</span>
@@ -1164,22 +1386,22 @@ function SignalsPage({ session, adminSession }: { session: LicenseSession | null
             {DURATIONS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
         </div>
-        <button className="btn-generate" onClick={handleGenerate} disabled={generating} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <button className="btn-generate" onClick={handleGenerate} disabled={generating || finding} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           {generating ? (
             <>
               <span className="spinner" /> Analyzing…
             </>
           ) : (
             <>
-              <IconActivity size={16} /> Deep Analyze
+              <IconActivity size={16} /> Analyze
             </>
           )}
         </button>
       </div>
 
-      {marketType === 'quotex' && !generating && !result && (
+      {marketType === 'quotex' && !generating && !result && !bestPairResult && (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, paddingLeft: 2 }}>
-          💡 Pairs with "OTC" work 24/7 (including weekends) · Live pairs work Mon–Fri
+          💡 OTC pairs 24/7 kaam karte hain · Live pairs Mon–Fri · Upar 🔥 button se best pair auto dhundo
         </div>
       )}
 

@@ -1140,6 +1140,11 @@ body::before {
   50% { transform: translateY(-5px); opacity: 1; }
 }
 
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 8px 40px rgba(16,185,129,0.12); }
+  50% { box-shadow: 0 8px 40px rgba(16,185,129,0.28), 0 0 0 3px rgba(16,185,129,0.08); }
+}
+
 /* ─── EMPTY STATE ───────────────────────────────────────────────────── */
 .empty-state {
   text-align: center;

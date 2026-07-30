@@ -315,13 +315,14 @@ class SignalEngine:
     When in doubt → WAIT. Always.
     """
 
-    # ── Balanced Thresholds — Good Signals + Reasonable Frequency ──────
-    MIN_CONFIDENCE   = 65   # % confidence - 65% threshold requested by user
-    MIN_EDGE_WEIGHT  = 3    # minimum 3-point gap between bull & bear (was 5)
-    MIN_ADX          = 17   # ADX 17+ = some trend present (was 20)
+    # ── ULTRA STRICT Thresholds — Accuracy Over Frequency ────────────
+    # Higher thresholds = fewer signals BUT 9/10 accuracy target
+    MIN_CONFIDENCE   = 75   # % confidence — raised from 65 to 75 for accuracy
+    MIN_EDGE_WEIGHT  = 5    # minimum 5-point gap between bull & bear (was 3)
+    MIN_ADX          = 22   # ADX 22+ = clear trend needed (was 17)
     MIN_EMA_BULL     = 3    # At least 3/4 EMA conditions must be bullish
     MIN_EMA_BEAR     = 3    # At least 3/4 EMA conditions must be bearish
-    MIN_MTF_AGREE    = 1    # At least 1 of 3 momentum timeframes must agree (was 2)
+    MIN_MTF_AGREE    = 2    # At least 2 of 3 momentum timeframes must agree (was 1)
     CONTRADICTION_VETO = True  # Strong counter-indicators still block signal
 
     def analyze(self, request: SignalRequest, candles: list[Candle]) -> SignalResponse:
@@ -730,10 +731,10 @@ class SignalEngine:
             return False, ""
 
         # ══════════════════════════════════════════════════════════════════
-        #  FINAL DECISION — ACCURATE MARKET ANALYSIS & DYNAMIC SIGNALS
+        #  FINAL DECISION — ULTRA ACCURATE MARKET ANALYSIS & STRICT SIGNALS
         # ══════════════════════════════════════════════════════════════════
-        MIN_EDGE = 2      # Minimum 2-point gap between bull and bear
-        MIN_DOMINANT = 4  # Minimum 4 points for dominant direction
+        MIN_EDGE = 5      # Minimum 5-point gap between bull and bear (raised from 2)
+        MIN_DOMINANT = 6  # Minimum 6 points for dominant direction (raised from 4)
         
         has_bull_edge = (bull_weight > bear_weight) and (edge_w >= MIN_EDGE) and (bull_weight >= MIN_DOMINANT)
         has_bear_edge = (bear_weight > bull_weight) and (edge_w >= MIN_EDGE) and (bear_weight >= MIN_DOMINANT)
@@ -790,17 +791,36 @@ class SignalEngine:
             icon = "BULL" if v.direction == +1 else "BEAR" if v.direction == -1 else "NEUT"
             analysis.append(f"  {icon} [{v.weight}pt] {v.name}: {v.detail}")
 
+        # ── Candle Entry Timing Recommendation ───────────────────────────
+        # Determine if we are near the start or end of the current candle
+        import time as _t
+        current_second = int(_t.time()) % 60  # seconds into current 1-min candle
+        # If < 10 seconds into candle → trade NOW on current candle
+        # If > 50 seconds → WAIT for NEXT candle (safer entry)
+        if current_second <= 10:
+            candle_timing = "⚡ TRADE NOW — Current candle just opened (0-10s). Enter immediately!"
+            entry_candle = "CURRENT"
+        elif current_second >= 50:
+            candle_timing = "⏳ WAIT for NEXT candle — Current candle ending in <10s. Enter on candle open!"
+            entry_candle = "NEXT"
+        else:
+            remaining = 60 - current_second
+            candle_timing = f"⏳ WAIT for NEXT candle — {remaining}s left. Enter when new candle opens!"
+            entry_candle = "NEXT"
+
         # Signal Output — Strict UP / DOWN / WAIT logic
         if confidence_ok and is_bull:
             signal = SignalAction.buy
             trend  = "Bullish"
             status = "BUY"
-            analysis.insert(0, f"📈 ACCURATE UP SIGNAL — Bull={bull_weight}pt Bear={bear_weight}pt Edge={edge_w}pt Conf={confidence}%")
+            analysis.insert(0, candle_timing)
+            analysis.insert(0, f"📈 ULTRA ACCURATE ↑ BUY — Bull={bull_weight}pt Bear={bear_weight}pt Edge={edge_w}pt Conf={confidence}% | Entry: {entry_candle} candle")
         elif confidence_ok and is_bear:
             signal = SignalAction.sell
             trend  = "Bearish"
             status = "SELL"
-            analysis.insert(0, f"📉 ACCURATE DOWN SIGNAL — Bull={bull_weight}pt Bear={bear_weight}pt Edge={edge_w}pt Conf={confidence}%")
+            analysis.insert(0, candle_timing)
+            analysis.insert(0, f"📉 ULTRA ACCURATE ↓ SELL — Bull={bull_weight}pt Bear={bear_weight}pt Edge={edge_w}pt Conf={confidence}% | Entry: {entry_candle} candle")
         else:
             signal = SignalAction.wait
             trend  = "Sideways"
@@ -808,11 +828,11 @@ class SignalEngine:
             if veto_reason:
                 analysis.insert(0, f"⛔ WAIT (Signal Vetoed) — {veto_reason}")
             elif edge_w < MIN_EDGE:
-                analysis.insert(0, f"⛔ WAIT — Equal/Choppy momentum ({edge_w}pt gap < {MIN_EDGE}pt edge)")
+                analysis.insert(0, f"⛔ WAIT — Momentum mixed ({edge_w}pt gap < {MIN_EDGE}pt required). Jaldi mat karo!")
             elif dominant_w < MIN_DOMINANT:
-                analysis.insert(0, f"⛔ WAIT — Weak conviction ({dominant_w}pt < {MIN_DOMINANT}pt required)")
+                analysis.insert(0, f"⛔ WAIT — Weak market ({dominant_w}pt < {MIN_DOMINANT}pt required). Abhi mat trade karo!")
             else:
-                analysis.insert(0, f"⛔ WAIT — Market sideways or mixed indicators ({bull_weight}pt vs {bear_weight}pt)")
+                analysis.insert(0, f"⛔ WAIT — Market sideways ({bull_weight}pt vs {bear_weight}pt). Signal clear nahi.")
 
         logger.info(
             "Signal pair=%s action=%s conf=%s bull=%s bear=%s",
