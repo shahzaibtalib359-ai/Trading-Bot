@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import secrets
 import time
@@ -106,11 +107,46 @@ async def verify_api_key_access(
     2. A valid API key and User ID (x_api_key and x_user_id)
     Returns a dict containing 'user_id' so dependent endpoints function identically.
     """
+def _resolve_user_id(x_user_token: str) -> int | None:
+    if not x_user_token:
+        return None
+    try:
+        payload = jwt.decode(x_user_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        if payload.get("type") == "user":
+            return int(payload["user_id"])
+    except Exception:
+        pass
+    _cleanup_user_sessions()
+    if x_user_token in _user_sessions:
+        return _user_sessions[x_user_token][0]
+    return None
+
+
+def _generate_user_token(user_id: int) -> str:
+    payload = {
+        "user_id": user_id,
+        "type": "user",
+        "exp": datetime.now(timezone.utc) + timedelta(days=7),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+async def verify_api_key_access(
+    x_api_key: str = Header(default=""),
+    x_user_id: str = Header(default=""),
+    x_user_token: str = Header(default=""),
+    repository: SignalRepository = Depends(get_repository),
+) -> dict:
+    """
+    Dependency that validates access via either:
+    1. A valid user session token (x_user_token) or JWT user token
+    2. A valid API key and User ID (x_api_key and x_user_id)
+    Returns a dict containing 'user_id' so dependent endpoints function identically.
+    """
     if x_user_token:
-        _cleanup_user_sessions()
-        if x_user_token not in _user_sessions:
+        user_id = _resolve_user_id(x_user_token)
+        if not user_id:
             raise HTTPException(status_code=401, detail="User session invalid or expired.")
-        user_id, _ = _user_sessions[x_user_token]
         user = repository.get_user_by_id(user_id)
         if not user:
             raise HTTPException(status_code=403, detail="User account not found.")
@@ -175,11 +211,10 @@ async def verify_user_token(
     x_user_token: str = Header(default=""),
     repository: SignalRepository = Depends(get_repository),
 ) -> int:
-    """Dependency that validates user token and returns user_id."""
-    _cleanup_user_sessions()
-    if not x_user_token or x_user_token not in _user_sessions:
+    """Dependency that validates user token (in-memory or JWT) and returns user_id."""
+    user_id = _resolve_user_id(x_user_token)
+    if not user_id:
         raise HTTPException(status_code=401, detail="User authentication required.")
-    user_id, _ = _user_sessions[x_user_token]
     user = repository.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=403, detail="User account not found.")
@@ -335,7 +370,7 @@ async def generate_signal(
         raise HTTPException(status_code=502, detail=str(exc) or "Market analysis failed.") from exc
 
 
-@router.post("/signals/scan", response_model=list[SignalResponse])
+@router.api_route("/signals/scan", methods=["GET", "POST", "OPTIONS"], response_model=list[SignalResponse])
 async def scan_pairs(
     mode: TradingMode,
     duration: str = Query("15 Seconds"),
@@ -350,28 +385,40 @@ async def scan_pairs(
     else:
         pairs = QUOTEX_PAIRS
     results: list[SignalResponse] = []
-    for pair in pairs:
-        request = SignalRequest(mode=mode, pair=pair, duration=duration)
-        signal = await signal_manager.generate(request)
-        if signal.signal.value != "WAIT":
-            repository.save_signal(signal, user_id=user_id)
-        results.append(signal)
+    
+    async def _scan_one(pair: str) -> SignalResponse | None:
+        try:
+            req = SignalRequest(mode=mode, pair=pair, duration=duration)
+            sig = await signal_manager.generate(req)
+            if sig.signal.value != "WAIT":
+                repository.save_signal(sig, user_id=user_id)
+            return sig
+        except Exception:
+            return None
+
+    batch_size = 10
+    for i in range(0, len(pairs), batch_size):
+        batch = pairs[i:i + batch_size]
+        batch_results = await asyncio.gather(*[_scan_one(p) for p in batch], return_exceptions=True)
+        for r in batch_results:
+            if isinstance(r, Exception):
+                continue
+            if r is not None:
+                results.append(r)
     return sorted(results, key=lambda item: item.confidence, reverse=True)
 
 
-@router.post("/signals/scan-quotex", response_model=list[SignalResponse])
+@router.api_route("/signals/scan-quotex", methods=["GET", "POST", "OPTIONS"], response_model=list[SignalResponse])
 async def scan_quotex_pairs(
     duration: str = Query("1 Minute"),
     repository: SignalRepository = Depends(get_repository),
     api_key_details: dict = Depends(verify_api_key_access),
 ) -> list[SignalResponse]:
-    """Scan all Quotex OTC pairs quickly and return only UP/DOWN signals sorted by confidence."""
-    import asyncio
-    from backend.services.market_data import is_forex_market_open
+    """Scan all Quotex pairs (both OTC and Live Forex pairs) quickly and return signals sorted by confidence."""
     user_id = api_key_details["user_id"]
     
-    # Prioritize OTC pairs (most traded on Quotex)
-    otc_pairs = [p for p in QUOTEX_PAIRS if "OTC" in p]
+    # Scan ALL Quotex pairs (OTC + Non-OTC Live Forex pairs)
+    target_pairs = QUOTEX_PAIRS
     
     results: list[SignalResponse] = []
     errors: list[str] = []
@@ -401,27 +448,25 @@ async def scan_quotex_pairs(
             errors.append(f"{pair}: {exc}")
             return None
 
-    # Run pairs concurrently in small batches to avoid rate limits
-    batch_size = 5
-    for i in range(0, len(otc_pairs), batch_size):
-        batch = otc_pairs[i:i + batch_size]
+    # Run pairs concurrently in batches
+    batch_size = 10
+    for i in range(0, len(target_pairs), batch_size):
+        batch = target_pairs[i:i + batch_size]
         batch_results = await asyncio.gather(*[_scan_one(p) for p in batch], return_exceptions=True)
         for r in batch_results:
             if isinstance(r, Exception):
-                # Log or handle the exception without crashing the batch
                 print(f"Error scanning pair in batch: {r}")
                 continue
             if r is not None:
                 results.append(r)
 
-    # Return only actionable UP/DOWN signals, sorted by confidence desc
+    # Return actionable UP/DOWN signals first, sorted by confidence desc
     actionable = [r for r in results if r.signal.value != "WAIT" and r.status != "MARKET_CLOSED"]
     actionable_sorted = sorted(actionable, key=lambda r: r.confidence, reverse=True)
     
-    # If no actionable signals found, return top 5 WAIT signals with explanation
     if not actionable_sorted:
         all_sorted = sorted(results, key=lambda r: r.confidence, reverse=True)
-        return all_sorted[:5]
+        return all_sorted[:10]
     
     return actionable_sorted
 
@@ -435,7 +480,6 @@ async def admin_generate_signal(
     _admin: str = Depends(verify_admin_token),
 ) -> SignalResponse:
     """Admin can generate signals directly without API key."""
-    # Validate pair for the mode
     if request.mode == TradingMode.forex:
         allowed = FOREX_PAIRS
     elif request.mode == TradingMode.crypto:
@@ -446,12 +490,11 @@ async def admin_generate_signal(
         raise HTTPException(status_code=400, detail=f"{request.pair} is not available for {request.mode.value}.")
     try:
         signal = await signal_manager.generate(request)
-        # Save with admin user_id=1 (or first user)
         if signal.signal.value != "WAIT":
             try:
                 repository.save_signal(signal, user_id=1)
             except Exception:
-                pass  # Don't fail if save fails
+                pass
         return signal
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -461,18 +504,15 @@ async def admin_generate_signal(
         raise HTTPException(status_code=502, detail=str(exc) or "Market analysis failed.") from exc
 
 
-@router.post("/admin/signal/scan-quotex", response_model=list[SignalResponse])
+@router.api_route("/admin/signal/scan-quotex", methods=["GET", "POST", "OPTIONS"], response_model=list[SignalResponse])
 async def admin_scan_quotex(
     duration: str = Query("1 Minute"),
     repository: SignalRepository = Depends(get_repository),
     _admin: str = Depends(verify_admin_token),
 ) -> list[SignalResponse]:
-    """Admin scan all Quotex OTC pairs."""
-    import asyncio
-    from backend.services.market_data import is_forex_market_open
-    otc_pairs = [p for p in QUOTEX_PAIRS if "OTC" in p]
+    """Admin scan all Quotex pairs (both OTC and Live Forex pairs)."""
+    target_pairs = QUOTEX_PAIRS
     results: list[SignalResponse] = []
-    market_open = is_forex_market_open()
 
     async def _scan_one(pair: str) -> SignalResponse | None:
         try:
@@ -487,7 +527,6 @@ async def admin_scan_quotex(
         except Exception as exc:
             err_str = str(exc).lower()
             if "closed" in err_str or "weekend" in err_str or "after-hours" in err_str:
-                # Return a special MARKET_CLOSED response instead of None
                 return SignalResponse(
                     mode=TradingMode.quotex,
                     pair=pair,
@@ -497,26 +536,28 @@ async def admin_scan_quotex(
                     duration=duration,
                     market_trend="Market Closed",
                     status="MARKET_CLOSED",
-                    analysis=["🔴 Market Closed — Forex market is closed on weekends. Reopens Sunday ~22:00 UTC."],
-                    data_warning="Market is closed (weekend/after-hours). OTC pairs are unavailable.",
+                    analysis=["🔴 Market Closed — Forex market is closed on weekends."],
+                    data_warning="Market is closed (weekend/after-hours).",
                 )
             return None
 
-    batch_size = 5
-    for i in range(0, len(otc_pairs), batch_size):
-        batch = otc_pairs[i:i + batch_size]
-        batch_results = await asyncio.gather(*[_scan_one(p) for p in batch])
+    batch_size = 10
+    for i in range(0, len(target_pairs), batch_size):
+        batch = target_pairs[i:i + batch_size]
+        batch_results = await asyncio.gather(*[_scan_one(p) for p in batch], return_exceptions=True)
         for r in batch_results:
+            if isinstance(r, Exception):
+                continue
             if r is not None:
                 results.append(r)
 
     actionable = [r for r in results if r.signal.value != "WAIT" and r.status != "MARKET_CLOSED"]
     if not actionable:
-        return sorted(results, key=lambda r: r.confidence, reverse=True)[:5]
+        return sorted(results, key=lambda r: r.confidence, reverse=True)[:10]
     return sorted(actionable, key=lambda r: r.confidence, reverse=True)
 
 
-@router.post("/admin/signal/scan", response_model=list[SignalResponse])
+@router.api_route("/admin/signal/scan", methods=["GET", "POST", "OPTIONS"], response_model=list[SignalResponse])
 async def admin_scan_pairs(
     mode: TradingMode,
     duration: str = Query("1 Minute"),
@@ -524,7 +565,6 @@ async def admin_scan_pairs(
     _admin: str = Depends(verify_admin_token),
 ) -> list[SignalResponse]:
     """Admin scan all pairs for a given mode."""
-    import asyncio
     if mode == TradingMode.forex:
         pairs = FOREX_PAIRS
     elif mode == TradingMode.crypto:
@@ -542,17 +582,19 @@ async def admin_scan_pairs(
         except Exception:
             return None
 
-    batch_size = 4
+    batch_size = 10
     for i in range(0, len(pairs), batch_size):
         batch = pairs[i:i + batch_size]
-        batch_results = await asyncio.gather(*[_scan_one(p) for p in batch])
+        batch_results = await asyncio.gather(*[_scan_one(p) for p in batch], return_exceptions=True)
         for r in batch_results:
+            if isinstance(r, Exception):
+                continue
             if r is not None:
                 results.append(r)
 
     actionable = [r for r in results if r.signal.value != "WAIT"]
     if not actionable:
-        return sorted(results, key=lambda r: r.confidence, reverse=True)[:5]
+        return sorted(results, key=lambda r: r.confidence, reverse=True)[:10]
     return sorted(actionable, key=lambda r: r.confidence, reverse=True)
 
 
@@ -807,12 +849,12 @@ async def user_login(
     if not verify_password(password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid username or password.")
         
-    # Generate user session token
-    token = secrets.token_urlsafe(32)
-    _user_sessions[token] = (user["id"], datetime.now(timezone.utc))
+    # Generate stateless JWT token (+ store in-memory for backward compat)
+    jwt_token = _generate_user_token(user["id"])
+    _user_sessions[jwt_token] = (user["id"], datetime.now(timezone.utc))
     
     return UserLoginResponse(
-        token=token,
+        token=jwt_token,
         user_id=user["id"],
         username=user["username"],
         email=user["email"],
@@ -1169,12 +1211,12 @@ async def license_login(
 
     repository.update_license_activity(body.license_key.strip())
 
-    token = secrets.token_urlsafe(32)
-    _user_sessions[token] = (user["id"], datetime.now(timezone.utc))
+    jwt_token = _generate_user_token(user["id"])
+    _user_sessions[jwt_token] = (user["id"], datetime.now(timezone.utc))
 
     _mark_user_online(user["id"])
     return LicenseLoginResponse(
-        token=token,
+        token=jwt_token,
         user_id=user["id"],
         username=user["username"],
         license_key=body.license_key.strip(),
@@ -1338,15 +1380,15 @@ async def verify_license(
             message="Your account has been suspended. Please contact admin.",
         )
 
-    # ── Create session ─────────────────────────────────────────────────
-    token = secrets.token_urlsafe(32)
-    _user_sessions[token] = (user["id"], datetime.now(timezone.utc))
+    # ── Create session (JWT for stateless serverless + in-memory for local) ───
+    jwt_token = _generate_user_token(user["id"])
+    _user_sessions[jwt_token] = (user["id"], datetime.now(timezone.utc))
     _mark_user_online(user["id"])
 
     return LicenseVerifyResponse(
         status="valid",
         message="License verified successfully. Welcome!",
-        token=token,
+        token=jwt_token,
         user_id=user["id"],
         username=user["username"],
         expires_at=lic["expires_at"],
