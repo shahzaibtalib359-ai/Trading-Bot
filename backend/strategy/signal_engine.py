@@ -707,34 +707,42 @@ class SignalEngine:
         #  LAYER 5 — CONTRADICTION VETO CHECK (EXTREME REVERSAL BOUNDS)
         # ══════════════════════════════════════════════════════════════════
         def _is_vetoed_bull() -> tuple[bool, str]:
-            """Check if bullish signal has extreme overbought contradictions or fake breakout."""
-            if rsi14 > 80:
-                return True, f"RSI={rsi14:.1f} extreme overbought (>80)"
-            if sk14 > 85 and sd14 > 85:
-                return True, f"Stochastic={sk14:.1f} extreme overbought"
-            if bb_pct > 0.96:
-                return True, f"BB={bb_pct:.2f} price at upper band limit"
-            if adx_val < 18 and (not adx_clear):
+            """Check if bullish signal has overbought bounds or micro-momentum contradiction."""
+            if rsi14 > 65:
+                return True, f"RSI={rsi14:.1f} near overbought (>65) — high risk of 1-min pullback drop"
+            if sk14 > 75 and sd14 > 75:
+                return True, f"Stochastic={sk14:.1f} overbought — risk of 1-min pullback"
+            if bb_pct > 0.88:
+                return True, f"BB={bb_pct:.2f} near upper band limit"
+            if adx_val < 20 and (not adx_clear):
                 return True, f"ADX={adx_val:.1f} extremely choppy market (fake UP breakout)"
+            if dir3 == -1:
+                return True, "Immediate 3-candle slope is negative (micro-downtrend)"
+            if candles[-1].close < candles[-1].open:
+                return True, "Latest candle closed red (counter-momentum)"
             return False, ""
 
         def _is_vetoed_bear() -> tuple[bool, str]:
-            """Check if bearish signal has extreme oversold contradictions or fake breakout."""
-            if rsi14 < 20:
-                return True, f"RSI={rsi14:.1f} extreme oversold (<20)"
-            if sk14 < 15 and sd14 < 15:
-                return True, f"Stochastic={sk14:.1f} extreme oversold"
-            if bb_pct < 0.04:
-                return True, f"BB={bb_pct:.2f} price at lower band limit"
-            if adx_val < 18 and (not adx_clear):
+            """Check if bearish signal has oversold bounds or micro-momentum contradiction."""
+            if rsi14 < 38:
+                return True, f"RSI={rsi14:.1f} near oversold (<38) — high risk of 1-min bounce green candle"
+            if sk14 < 25 and sd14 < 25:
+                return True, f"Stochastic={sk14:.1f} oversold — risk of 1-min bounce"
+            if bb_pct < 0.12:
+                return True, f"BB={bb_pct:.2f} near lower band limit"
+            if adx_val < 20 and (not adx_clear):
                 return True, f"ADX={adx_val:.1f} extremely choppy market (fake DOWN breakout)"
+            if dir3 == +1:
+                return True, "Immediate 3-candle slope is positive (micro-uptrend)"
+            if candles[-1].close > candles[-1].open:
+                return True, "Latest candle closed green (counter-momentum)"
             return False, ""
 
         # ══════════════════════════════════════════════════════════════════
         #  FINAL DECISION — ULTRA ACCURATE MARKET ANALYSIS & STRICT SIGNALS
         # ══════════════════════════════════════════════════════════════════
-        MIN_EDGE = 5      # Minimum 5-point gap between bull and bear (raised from 2)
-        MIN_DOMINANT = 6  # Minimum 6 points for dominant direction (raised from 4)
+        MIN_EDGE = 6      # Minimum 6-point gap between bull and bear
+        MIN_DOMINANT = 7  # Minimum 7 points for dominant direction
         
         has_bull_edge = (bull_weight > bear_weight) and (edge_w >= MIN_EDGE) and (bull_weight >= MIN_DOMINANT)
         has_bear_edge = (bear_weight > bull_weight) and (edge_w >= MIN_EDGE) and (bear_weight >= MIN_DOMINANT)
@@ -792,30 +800,29 @@ class SignalEngine:
             analysis.append(f"  {icon} [{v.weight}pt] {v.name}: {v.detail}")
 
         # ── Candle Entry Timing Recommendation ───────────────────────────
-        # Determine if we are near the start or end of the current candle
         import time as _t
         current_second = int(_t.time()) % 60  # seconds into current 1-min candle
-        # If < 10 seconds into candle → trade NOW on current candle
-        # If > 50 seconds → WAIT for NEXT candle (safer entry)
+        is_candle_open_window = current_second <= 10
+
         if current_second <= 10:
             candle_timing = "⚡ TRADE NOW — Current candle just opened (0-10s). Enter immediately!"
             entry_candle = "CURRENT"
         elif current_second >= 50:
-            candle_timing = "⏳ WAIT for NEXT candle — Current candle ending in <10s. Enter on candle open!"
+            candle_timing = f"⏳ WAIT for NEXT candle open — {60-current_second}s left. Enter on candle open!"
             entry_candle = "NEXT"
         else:
-            remaining = 60 - current_second
-            candle_timing = f"⏳ WAIT for NEXT candle — {remaining}s left. Enter when new candle opens!"
+            candle_timing = f"⏳ WAIT for NEXT candle open — {60-current_second}s left. Enter when new candle opens!"
             entry_candle = "NEXT"
 
         # Signal Output — Strict UP / DOWN / WAIT logic
-        if confidence_ok and is_bull:
+        # STRICT: Only allow BUY / SELL if in the 0-10s candle open window!
+        if confidence_ok and is_bull and is_candle_open_window:
             signal = SignalAction.buy
             trend  = "Bullish"
             status = "BUY"
             analysis.insert(0, candle_timing)
             analysis.insert(0, f"📈 ULTRA ACCURATE ↑ BUY — Bull={bull_weight}pt Bear={bear_weight}pt Edge={edge_w}pt Conf={confidence}% | Entry: {entry_candle} candle")
-        elif confidence_ok and is_bear:
+        elif confidence_ok and is_bear and is_candle_open_window:
             signal = SignalAction.sell
             trend  = "Bearish"
             status = "SELL"
@@ -825,7 +832,9 @@ class SignalEngine:
             signal = SignalAction.wait
             trend  = "Sideways"
             status = "WAIT"
-            if veto_reason:
+            if not is_candle_open_window and (is_bull or is_bear):
+                analysis.insert(0, f"⏳ WAIT — Candle mid-way ({current_second}s elapsed). Wait for next candle open (0-10s)!")
+            elif veto_reason:
                 analysis.insert(0, f"⛔ WAIT (Signal Vetoed) — {veto_reason}")
             elif edge_w < MIN_EDGE:
                 analysis.insert(0, f"⛔ WAIT — Momentum mixed ({edge_w}pt gap < {MIN_EDGE}pt required). Jaldi mat karo!")

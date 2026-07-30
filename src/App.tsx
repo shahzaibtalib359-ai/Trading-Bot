@@ -140,6 +140,88 @@ function confClass(c: number) {
   return 'conf-low'
 }
 
+// ─── Custom Scrollable Dropdown (Always opens DOWNWARDS with Search) ────────
+function CustomDropdown({
+  options,
+  value,
+  onChange,
+  searchable = true
+}: {
+  options: string[]
+  value: string
+  onChange: (val: string) => void
+  searchable?: boolean
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const filtered = searchable && search.trim()
+    ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+    : options
+
+  return (
+    <div ref={dropdownRef} className="custom-dropdown-container">
+      <button
+        type="button"
+        className="custom-dropdown-trigger"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span>{value}</span>
+        <span style={{ fontSize: 11, opacity: 0.8, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
+      </button>
+
+      {isOpen && (
+        <div className="custom-dropdown-menu">
+          {searchable && (
+            <input
+              type="text"
+              className="custom-dropdown-search"
+              placeholder="🔍 Search pair..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              autoFocus
+            />
+          )}
+          <div className="custom-dropdown-list">
+            {filtered.length > 0 ? (
+              filtered.map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  className={`custom-dropdown-item ${opt === value ? 'selected' : ''}`}
+                  onClick={() => {
+                    onChange(opt)
+                    setIsOpen(false)
+                    setSearch('')
+                  }}
+                >
+                  <span>{opt}</span>
+                  {opt === value && <span style={{ color: 'var(--accent-purple)', fontWeight: 800 }}>✓</span>}
+                </button>
+              ))
+            ) : (
+              <div style={{ padding: '12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                No pair found
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 //  APP
 // ═══════════════════════════════════════════════════════════════════════
@@ -1463,15 +1545,21 @@ function SignalsPage({ session, adminSession }: { session: LicenseSession | null
       <div className="signal-controls">
         <div className="control-group">
           <span className="control-label">Trading Pair</span>
-          <select className="control-select" value={pair} onChange={e => setPair(e.target.value)}>
-            {activePairs.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
+          <CustomDropdown
+            options={activePairs}
+            value={pair}
+            onChange={setPair}
+            searchable={true}
+          />
         </div>
         <div className="control-group">
           <span className="control-label">Duration</span>
-          <select className="control-select" value={duration} onChange={e => setDuration(e.target.value)}>
-            {DURATIONS.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
+          <CustomDropdown
+            options={DURATIONS}
+            value={duration}
+            onChange={setDuration}
+            searchable={false}
+          />
         </div>
         <button className="btn-generate" onClick={handleGenerate} disabled={generating || finding} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           {generating ? (

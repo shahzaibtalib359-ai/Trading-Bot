@@ -353,13 +353,16 @@ def generate_synthetic_candles(pair: str, limit: int = 160) -> list[Candle]:
         
         # For the final candle, add sub-minute live tick fluctuations
         if i == limit - 1:
-            # Re-seed with exact seconds to ensure dynamic tick updates
-            random.seed(seed_val + int(now.timestamp() / 5)) 
-            tick_change = random.uniform(-0.0003, 0.0003)
-            close_val = close_val * (1 + tick_change)
+            # Dynamic tick based on exact timestamp (seconds + microseconds)
+            sec = now.second + now.microsecond / 1_000_000.0
+            # Re-seed with 2-second bucket for micro-ticks while maintaining smooth drift
+            random.seed(seed_val + int(now.timestamp() / 2))
+            tick_dir = math.sin((sec / 60.0) * 2 * math.pi) * 0.0004
+            micro_rnd = random.uniform(-0.00015, 0.00015)
+            close_val = close_val * (1 + tick_dir + micro_rnd)
             high_val = max(high_val, close_val)
             low_val = min(low_val, close_val)
-            ts = now # set to exact current time
+            ts = now
         
         candles.append(
             Candle(
