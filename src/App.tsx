@@ -53,68 +53,21 @@ const WHATSAPP_URL = `https://wa.me/923224914560?text=${encodeURIComponent('Hell
 const MIN_CONFIDENCE = 65
 
 const QUOTEX_PAIRS = [
-  // ─ Live Pairs (weekdays only) ─────────────────────────────
-  'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'AUD/JPY',
-  'AUD/CAD', 'AUD/CHF', 'AUD/NZD', 'EUR/GBP', 'EUR/JPY',
-  'EUR/AUD', 'EUR/CAD', 'EUR/CHF', 'EUR/NZD', 'GBP/JPY',
-  'GBP/AUD', 'GBP/CAD', 'GBP/CHF', 'GBP/NZD', 'NZD/USD',
-  'NZD/CAD', 'NZD/CHF', 'NZD/JPY', 'CAD/JPY', 'CAD/CHF',
-  'CHF/JPY', 'USD/CAD', 'USD/CHF',
-
-  // ─ Major OTC Pairs (24/7) ─────────────────────────────────
-  'EUR/USD OTC', 'GBP/USD OTC', 'USD/JPY OTC', 'AUD/USD OTC',
-  'AUD/JPY OTC', 'AUD/CAD OTC', 'AUD/CHF OTC', 'AUD/NZD OTC',
-  'EUR/GBP OTC', 'EUR/AUD OTC', 'EUR/CAD OTC', 'EUR/CHF OTC',
-  'EUR/NZD OTC', 'EUR/JPY OTC', 'GBP/JPY OTC', 'GBP/AUD OTC',
-  'GBP/CAD OTC', 'GBP/CHF OTC', 'GBP/NZD OTC', 'NZD/USD OTC',
-  'NZD/CAD OTC', 'NZD/CHF OTC', 'NZD/JPY OTC', 'CAD/CHF OTC',
-  'CAD/JPY OTC', 'CHF/JPY OTC', 'USD/CAD OTC', 'USD/CHF OTC',
-
-  // ─ Exotic OTC Pairs (24/7) ────────────────────────────────
-  'USD/BRL OTC', 'USD/TRY OTC', 'USD/EGP OTC', 'USD/IDR OTC',
-  'USD/NGN OTC', 'USD/ARS OTC', 'USD/BDT OTC', 'USD/INR OTC',
-  'USD/COP OTC', 'USD/PKR OTC', 'USD/DZD OTC', 'USD/MXN OTC',
-  'USD/PHP OTC', 'USD/ZAR OTC'
+  'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CHF', 'EUR/GBP',
+  'USD/CAD', 'NZD/USD', 'EUR/JPY', 'GBP/JPY', 'AUD/JPY', 'EUR/CHF',
+  'EUR/USD (OTC)', 'GBP/USD (OTC)', 'USD/JPY (OTC)', 'AUD/USD (OTC)',
+  'USD/CHF (OTC)', 'EUR/GBP (OTC)', 'USD/CAD (OTC)', 'NZD/USD (OTC)',
+  'EUR/JPY (OTC)', 'GBP/JPY (OTC)', 'AUD/JPY (OTC)', 'EUR/CHF (OTC)'
 ]
 
 const QUOTEX_OTC = QUOTEX_PAIRS.filter(p => p.includes('OTC'))
 const QUOTEX_LIVE = QUOTEX_PAIRS.filter(p => !p.includes('OTC'))
 const ALL_QUOTEX = QUOTEX_PAIRS
 
-// ─── Forex Pairs (with Metals) ────────────────────────────────────────
-const FOREX_PAIRS = [
-  // Metals
-  'XAU/USD',   // Gold
-  'XAG/USD',   // Silver
-  'XPT/USD',   // Platinum
-  'XPD/USD',   // Palladium
-  // Major
-  'EUR/USD','GBP/USD','USD/JPY','USD/CHF','USD/CAD','AUD/USD','NZD/USD',
-  // EUR Crosses
-  'EUR/GBP','EUR/JPY','EUR/AUD','EUR/CAD','EUR/CHF','EUR/NZD',
-  // GBP Crosses
-  'GBP/JPY','GBP/AUD','GBP/CAD','GBP/CHF','GBP/NZD',
-  // AUD Crosses
-  'AUD/JPY','AUD/CAD','AUD/CHF','AUD/NZD',
-  // NZD / CAD / CHF Crosses
-  'NZD/JPY','NZD/CAD','NZD/CHF','CAD/JPY','CAD/CHF','CHF/JPY',
-  // USD Exotics
-  'USD/ZAR','USD/MXN','USD/BRL','USD/TRY','USD/SGD',
-  'USD/HKD','USD/NOK','USD/SEK','USD/DKK','USD/PLN',
-  'USD/HUF','USD/CZK','USD/INR','USD/PKR','USD/ARS',
-  'USD/COP','USD/EGP','USD/NGN','USD/BDT','USD/DZD',
-  'USD/IDR','USD/PHP',
-]
+const FOREX_PAIRS = QUOTEX_PAIRS
+const CRYPTO_PAIRS = QUOTEX_PAIRS
 
-// ─── Crypto / Binance Pairs ───────────────────────────────────────────
-const CRYPTO_PAIRS = [
-  'BTC/USDT','ETH/USDT','BNB/USDT','SOL/USDT','XRP/USDT',
-  'BCH/USDT','LTC/USDT','AVAX/USDT','DOT/USDT','LINK/USDT',
-  'ETC/USDT','ATOM/USDT','ZEC/USDT','DASH/USDT','TON/USDT',
-  'AXS/USDT','DOGE/USDT','ADA/USDT','TRX/USDT','UNI/USDT',
-]
-
-const ALL_PAIRS = [...QUOTEX_PAIRS, ...FOREX_PAIRS, ...CRYPTO_PAIRS]
+const ALL_PAIRS = QUOTEX_PAIRS
 
 const DURATIONS = ['5 Seconds','10 Seconds','15 Seconds','30 Seconds','1 Minute','5 Minutes']
 
@@ -1298,22 +1251,11 @@ function SignalsPage({ session, adminSession }: { session: LicenseSession | null
         <p className="page-subtitle">Deep market analysis · 11 indicators · Ultra-accurate signals</p>
       </div>
 
-      {/* Market Type Tabs */}
+      {/* Market Type Tabs (Quotex Only) */}
       <div className="market-type-tabs">
-        <button className={`market-tab ${marketType === 'quotex' ? 'active' : ''}`}
-          onClick={() => handleMarketTypeChange('quotex')}
+        <button className="market-tab active"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <IconChart size={15} /> Quotex
-        </button>
-        <button className={`market-tab ${marketType === 'forex' ? 'active' : ''}`}
-          onClick={() => handleMarketTypeChange('forex')}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <IconGlobe size={15} /> Forex / Metals
-        </button>
-        <button className={`market-tab ${marketType === 'crypto' ? 'active' : ''}`}
-          onClick={() => handleMarketTypeChange('crypto')}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <IconCoins size={15} /> Binance
+          <IconChart size={15} /> Quotex (Chinese Bot AI Signals)
         </button>
       </div>
 
@@ -1334,9 +1276,7 @@ function SignalsPage({ session, adminSession }: { session: LicenseSession | null
             🔥 Real-time Auto Scanner
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-            {marketType === 'quotex' && `Scanning all Quotex assets for high-confidence institutional entry points.`}
-            {marketType === 'forex'  && `Scanning all global Forex and Metal markets for volatility clusters.`}
-            {marketType === 'crypto' && `Scanning all Binance spot pairs for momentum-driven trade setups.`}
+            Scanning all Chinese Bot Quotex pairs for high-confidence AI signals.
           </div>
         </div>
         <button
