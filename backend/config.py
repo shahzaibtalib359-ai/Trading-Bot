@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["*"]
 
     market_provider: str = "auto"
+    chinese_bot_enabled: bool = True
+    chinese_bot_url: str = "https://chinese-bot.com"
 
     external_market_api_url: str | None = None
     external_market_api_key: str | None = None
