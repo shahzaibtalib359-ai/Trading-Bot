@@ -1257,9 +1257,9 @@ function SignalsPage({ session, adminSession }: { session: LicenseSession | null
         return
       }
       const allResults: SignalResponse[] = await res.json()
-      // Filter UP/DOWN signals with 70%+ confidence
+      // Filter UP/DOWN signals from Chinese Bot
       const actionable = allResults
-        .filter(r => r.signal !== 'WAIT' && r.status !== 'MARKET_CLOSED' && r.confidence >= 70)
+        .filter(r => r.signal !== 'WAIT' && r.status !== 'MARKET_CLOSED')
         .sort((a, b) => b.confidence - a.confidence)
 
       // Store top 5 results for leaderboard display

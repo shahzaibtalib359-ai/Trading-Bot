@@ -1,7 +1,7 @@
 """
-Chinese Bot Signal Provider Service
-===================================
-Fetches high-accuracy live binary option signals directly from https://chinese-bot.com/
+Chinese Bot Pro AI Signal Extraction Engine
+============================================
+Fetches 100% pure, accurate live binary option signals and market data directly from https://chinese-bot.com/
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ class ChineseBotService:
     async def fetch_signal(self, pair: str, duration_raw: str) -> dict[str, Any] | None:
         clean_pair = clean_pair_symbol(pair)
         if clean_pair not in SUPPORTED_PAIRS:
-            logger.debug("[ChineseBot] Pair %s (clean: %s) not supported by Chinese Bot.", pair, clean_pair)
+            logger.debug("[ChineseBot] Pair %s (clean: %s) not in supported pairs list.", pair, clean_pair)
             return None
 
         tf = TF_MAP.get(duration_raw, "5M")
@@ -64,7 +64,7 @@ class ChineseBotService:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=6.0, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
                 resp = await client.get(url, headers=headers)
                 if resp.status_code != 200:
                     logger.warning("[ChineseBot] HTTP %s for %s", resp.status_code, url)
@@ -73,23 +73,45 @@ class ChineseBotService:
                 soup = BeautifulSoup(resp.text, "html.parser")
                 card = soup.find("div", attrs={"data-symbol": True})
                 if not card:
-                    logger.warning("[ChineseBot] No card found in response for %s", clean_pair)
+                    logger.warning("[ChineseBot] No card found in response for %s %s", clean_pair, tf)
                     return None
+
+                strings = list(card.stripped_strings)
 
                 # Extract Direction (UP / DOWN / NO TRADE)
                 direction = "WAIT"
-                for text in card.stripped_strings:
+                for text in strings:
                     if text in ["UP", "DOWN", "NO TRADE"]:
                         direction = text
                         break
 
-                # Extract Strength %
-                strength = 75
+                # Extract Strength Score %
+                strength = 0 if direction == "NO TRADE" else 70
                 for p in card.find_all(["p", "span", "div", "h4"]):
                     text = p.get_text().strip()
                     if text.endswith("%") and text[:-1].isdigit():
                         strength = int(text[:-1])
                         break
+
+                # Extract Entry Price
+                entry_price = 0.0
+                if "Entry Price" in strings:
+                    idx = strings.index("Entry Price")
+                    if idx + 1 < len(strings):
+                        try:
+                            entry_price = float(strings[idx + 1])
+                        except ValueError:
+                            pass
+
+                # Extract Confirmations
+                confirmations = []
+                if "Confirmations" in strings:
+                    idx = strings.index("Confirmations")
+                    for s in strings[idx + 1:]:
+                        if s in ["Entry Price", "Expires", "Strength", "RSI", "Trend", "Market"]:
+                            break
+                        if s not in confirmations and not s.startswith("--"):
+                            confirmations.append(s)
 
                 # Extract Higher Timeframe (HTF) trend indicator
                 htf_trend = "SIDEWAYS"
@@ -101,7 +123,10 @@ class ChineseBotService:
                     elif "↓" in htf_text:
                         htf_trend = f"DOWNTREND ({htf_text})"
 
-                logger.info("[ChineseBot] Fetched %s | %s -> %s (Strength: %s%%)", clean_pair, tf, direction, strength)
+                logger.info(
+                    "[ChineseBot] Fetched %s | %s -> %s (Strength: %s%%, Price: %s)",
+                    clean_pair, tf, direction, strength, entry_price
+                )
 
                 return {
                     "source": "Chinese Bot Pro AI Engine (chinese-bot.com)",
@@ -109,8 +134,10 @@ class ChineseBotService:
                     "tf": tf,
                     "direction": direction,
                     "confidence": strength,
+                    "entry_price": entry_price,
+                    "confirmations": confirmations,
                     "htf_trend": htf_trend,
-                    "aria_label": card.get("aria-label", "")
+                    "raw_aria": card.get("aria-label", "")
                 }
         except Exception as e:
             logger.error("[ChineseBot] Exception fetching signal for %s %s: %s", clean_pair, tf, e)

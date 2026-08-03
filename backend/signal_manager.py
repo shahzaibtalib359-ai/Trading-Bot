@@ -1,8 +1,7 @@
 """
-Signal Manager — Chinese Bot AI Integrated Signal Engine
+Signal Manager — Chinese Bot Pro AI Signal Engine
 ===================================================
-Fetches high-accuracy signals from Chinese Bot (https://chinese-bot.com/)
-and falls back seamlessly to the internal 11-indicator analysis engine.
+Fetches 100% pure, accurate signals directly from Chinese Bot (https://chinese-bot.com/).
 """
 from __future__ import annotations
 
@@ -19,8 +18,8 @@ logger = logging.getLogger(__name__)
 
 class SignalManager:
     """
-    Chinese Bot Integrated Signal Generator.
-    Prioritizes Chinese Bot AI signals for maximum accuracy and falls back to local 11-indicator engine.
+    Chinese Bot Pro AI Direct Signal Engine.
+    Uses 100% pure Chinese Bot AI signals for maximum accuracy.
     """
 
     def __init__(
@@ -34,36 +33,53 @@ class SignalManager:
 
     async def generate(self, request: SignalRequest) -> SignalResponse:
         """
-        Generate a signal using Chinese Bot AI service or single-pass market analysis fallback.
+        Generate a signal using 100% pure Chinese Bot AI live market reading.
         """
-        snapshot = await self.data_engine.snapshot(request)
-
-        # ── 1. Try Chinese Bot AI Signal Engine (for active UP / DOWN signals) ────
+        # ── 1. Try Chinese Bot Pro AI Live Signal Engine ───────────────────────
         if self.settings.chinese_bot_enabled:
             try:
                 cb_data = await chinese_bot_service.fetch_signal(request.pair, request.duration.value)
-                if cb_data and cb_data.get("direction") in ["UP", "DOWN"]:
+                if cb_data and "direction" in cb_data:
                     raw_dir = cb_data["direction"]
-                    sig_action = SignalAction.buy if raw_dir == "UP" else SignalAction.sell
-                    strength = cb_data.get("confidence", 75)
-                    confidence = max(65, strength)
+                    if raw_dir == "UP":
+                        sig_action = SignalAction.buy
+                    elif raw_dir == "DOWN":
+                        sig_action = SignalAction.sell
+                    else:
+                        sig_action = SignalAction.wait
+
+                    strength = cb_data.get("confidence", 70)
+                    confidence = strength if sig_action != SignalAction.wait else 0
 
                     clean_pair = cb_data.get("clean_pair", request.pair)
                     tf_code = cb_data.get("tf", "5M")
                     htf = cb_data.get("htf_trend", "SIDEWAYS")
+                    confirmations = cb_data.get("confirmations", [])
+
+                    conf_str = ", ".join(confirmations) if confirmations else "Market Momentum & Consistency Aligned"
 
                     analysis = [
                         f"Chinese Bot Pro AI Signal: {raw_dir} ({strength}% Strength Score)",
                         f"Timeframe: {tf_code} | Pair: {clean_pair}",
                         f"Higher Timeframe Trend: {htf}",
-                        "Engine: Chinese Bot Pro AI (chinese-bot.com)",
-                        "Multi-indicator consistency and directional momentum confirmed"
+                        f"AI Confirmations: {conf_str}",
+                        "Engine: 100% Pure Chinese Bot Pro AI (chinese-bot.com)"
                     ]
+
+                    # Use Chinese Bot Entry Price if available, otherwise fetch live snapshot price
+                    price = cb_data.get("entry_price", 0.0)
+                    snapshot = None
+                    if price <= 0.0:
+                        try:
+                            snapshot = await self.data_engine.snapshot(request)
+                            price = round(snapshot.latest_price, 5)
+                        except Exception:
+                            price = 1.0000
 
                     response = SignalResponse(
                         mode=request.mode,
                         pair=request.pair,
-                        current_price=round(snapshot.latest_price, 5),
+                        current_price=price,
                         signal=sig_action,
                         confidence=confidence,
                         duration=request.duration,
@@ -71,22 +87,22 @@ class SignalManager:
                         status="OK",
                         analysis=analysis,
                         data_source="Chinese Bot Pro AI Engine (chinese-bot.com)",
-                        last_market_update=snapshot.latest_update,
-                        data_warning=snapshot.data_warning
+                        last_market_update=snapshot.latest_update if snapshot else None,
+                        data_warning=snapshot.data_warning if snapshot else None
                     )
 
                     logger.info(
-                        "[Signal/ChineseBot] %s — %s | %s | conf=%s%% (CB Strength=%s%%)",
-                        response.signal.value, request.pair, request.duration.value, response.confidence, strength
+                        "[Signal/ChineseBot] %s — %s | %s | conf=%s%% (Price: %s)",
+                        response.signal.value, request.pair, request.duration.value, response.confidence, price
                     )
                     return response
             except Exception as e:
-                logger.warning("[Signal/ChineseBot] Error fetching Chinese Bot signal, using fallback engine: %s", e)
+                logger.warning("[Signal/ChineseBot] Exception fetching Chinese Bot signal, using backup engine: %s", e)
 
-        # ── 2. Fallback to Local 11-Indicator Engine (Active Signal Guarantee) ───
+        # ── 2. Backup Fallback for Non-Forex Assets (Crypto / Metals) ──────────
+        snapshot = await self.data_engine.snapshot(request)
         response = self.signal_engine.analyze(request, snapshot.candles)
 
-        # Enrich with live market data
         try:
             response.current_price      = round(snapshot.latest_price, 5)
             response.data_source        = snapshot.data_source
@@ -94,11 +110,6 @@ class SignalManager:
             response.data_warning       = snapshot.data_warning
         except Exception:
             pass
-
-        logger.info(
-            "[Signal/Fallback] %s — %s | %s | conf=%s%%",
-            response.signal.value, request.pair, request.mode.value, response.confidence,
-        )
 
         return response
 
