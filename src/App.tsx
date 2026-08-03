@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import './App.css'
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -93,7 +94,7 @@ function confClass(c: number) {
   return 'conf-low'
 }
 
-// ─── Custom Scrollable Dropdown (Always opens DOWNWARDS with Search) ────────
+// ─── Custom Scrollable Dropdown (Portal-based, Always Top Z-Index) ────────
 function CustomDropdown({
   options,
   value,
@@ -107,17 +108,47 @@ function CustomDropdown({
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [coords, setCoords] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 220 })
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const updateCoords = useCallback(() => {
+    if (dropdownRef.current) {
+      const rect = dropdownRef.current.getBoundingClientRect()
+      setCoords({
+        top: rect.bottom + window.scrollY + 6,
+        left: rect.left + window.scrollX,
+        width: Math.max(rect.width, 220)
+      })
+    }
+  }, [])
+
+  const handleToggle = () => {
+    if (!isOpen) {
+      updateCoords()
+    }
+    setIsOpen(!isOpen)
+  }
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        const menuElem = document.getElementById('custom-dropdown-portal-menu')
+        if (menuElem && menuElem.contains(e.target as Node)) return
         setIsOpen(false)
       }
     }
+    function handleScrollOrResize() {
+      if (isOpen) updateCoords()
+    }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+    window.addEventListener('scroll', handleScrollOrResize, true)
+    window.addEventListener('resize', handleScrollOrResize)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('scroll', handleScrollOrResize, true)
+      window.removeEventListener('resize', handleScrollOrResize)
+    }
+  }, [isOpen, updateCoords])
 
   const filtered = searchable && search.trim()
     ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
@@ -128,14 +159,24 @@ function CustomDropdown({
       <button
         type="button"
         className="custom-dropdown-trigger"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggle}
       >
         <span>{value}</span>
         <span style={{ fontSize: 11, opacity: 0.8, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>▼</span>
       </button>
 
-      {isOpen && (
-        <div className="custom-dropdown-menu">
+      {isOpen && createPortal(
+        <div
+          id="custom-dropdown-portal-menu"
+          className="custom-dropdown-menu"
+          style={{
+            position: 'absolute',
+            top: coords.top,
+            left: coords.left,
+            width: coords.width,
+            zIndex: 999999,
+          }}
+        >
           {searchable && (
             <input
               type="text"
@@ -160,16 +201,17 @@ function CustomDropdown({
                   }}
                 >
                   <span>{opt}</span>
-                  {opt === value && <span style={{ color: 'var(--accent-purple)', fontWeight: 800 }}>✓</span>}
+                  {opt === value && <span style={{ color: '#8b5cf6', fontWeight: 800 }}>✓</span>}
                 </button>
               ))
             ) : (
-              <div style={{ padding: '12px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
+              <div style={{ padding: '12px', fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
                 No pair found
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
