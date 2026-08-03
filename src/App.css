@@ -617,71 +617,91 @@ body::before {
 }
 
 /* ─── SIGNAL DASHBOARD ──────────────────────────────────────────────── */
+.signal-controls-card {
+  background: linear-gradient(135deg, rgba(20, 25, 45, 0.75), rgba(15, 20, 38, 0.85));
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37), 0 0 20px rgba(139, 92, 246, 0.1);
+  border-radius: 18px;
+  padding: 24px;
+  margin-bottom: 28px;
+  backdrop-filter: blur(16px);
+}
+
+.signal-controls-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.signal-controls-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.signal-controls-badge {
+  font-size: 11px;
+  font-weight: 800;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 20px;
+  padding: 4px 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
 .signal-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  margin-bottom: 28px;
-  align-items: center;
+  gap: 16px;
+  align-items: flex-end;
 }
 
 .control-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  min-width: 210px;
+  flex: 1;
 }
 
 .control-label {
   font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
+  font-weight: 800;
+  color: rgba(196, 181, 253, 0.85);
+  letter-spacing: 1.2px;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-}
-
-.control-select {
-  background: rgba(15, 22, 42, 0.35);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  padding: 11px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: var(--transition);
-  min-width: 170px;
-  outline: none;
-}
-
-.control-select:focus {
-  border-color: var(--accent-purple);
-  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25);
-  background: rgba(15, 22, 42, 0.5);
-}
-
-.control-select option {
-  background: #0f172a;
-  color: var(--text-primary);
 }
 
 .btn-generate {
-  padding: 11px 26px;
-  background: var(--gradient-primary);
+  height: 48px;
+  padding: 0 32px;
+  background: linear-gradient(135deg, #7c3aed, #4f46e5);
   border: none;
-  border-radius: var(--radius-sm);
-  color: #070913;
-  font-size: 14px;
-  font-weight: 700;
+  border-radius: 12px;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
   cursor: pointer;
-  transition: var(--transition);
-  font-family: inherit;
-  display: flex;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  margin-top: auto;
-  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2);
+  box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+}
+
+.btn-generate:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(124, 58, 237, 0.6);
+  background: linear-gradient(135deg, #8b5cf6, #6366f1);
 }
 
 

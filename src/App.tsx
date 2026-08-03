@@ -275,9 +275,6 @@ export default function App() {
           <button className={`sidebar-link ${page === 'history' ? 'active' : ''}`} onClick={() => { setPage('history'); setSidebarOpen(false) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
             <IconClipboard size={16} /> Trade History
           </button>
-          <button className={`sidebar-link ${page === 'backtest' ? 'active' : ''}`} onClick={() => { setPage('backtest'); setSidebarOpen(false) }} style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
-            <IconFlask size={16} /> Backtest (10 Trades)
-          </button>
 
           {isAdmin && (
             <>
@@ -1251,274 +1248,55 @@ function SignalsPage({ session, adminSession }: { session: LicenseSession | null
         <p className="page-subtitle">Deep market analysis · 11 indicators · Ultra-accurate signals</p>
       </div>
 
-      {/* Market Type Tabs (Quotex Only) */}
+      {/* Market Type Tab */}
       <div className="market-type-tabs">
         <button className="market-tab active"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <IconChart size={15} /> Quotex (Chinese Bot AI Signals)
+          <IconChart size={15} /> Trading Bot
         </button>
       </div>
 
-      {/* ── BEST PAIR FINDER BUTTON ─────────────────────────────────────── */}
-      <div className="best-pair-card" style={{
-        background: 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(59,130,246,0.08))',
-        border: '1px solid rgba(139,92,246,0.25)',
-        borderRadius: 16,
-        padding: '16px 20px',
-        marginBottom: 20,
-        display: 'flex',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 14,
-      }}>
-        <div style={{ flex: 1, minWidth: 180 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--accent-purple)', letterSpacing: 0.3 }}>
-            🔥 Real-time Auto Scanner
+      {/* ── Polished Signal Setup Card ───────────────────────────────────── */}
+      <div className="signal-controls-card">
+        <div className="signal-controls-header">
+          <div className="signal-controls-title">
+            <IconActivity size={18} color="#8b5cf6" /> Setup Signal Request
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-            Scanning all Chinese Bot Quotex pairs for high-confidence AI signals.
-          </div>
+          <div className="signal-controls-badge">Quotex AI Engine Active</div>
         </div>
-        <button
-          className="best-pair-btn"
-          onClick={handleFindBestPair}
-          disabled={finding || generating}
-          style={{
-            background: finding ? 'rgba(139,92,246,0.2)' : 'linear-gradient(135deg, #7c3aed, #4f46e5)',
-            color: 'white',
-            border: 'none',
-            borderRadius: 12,
-            padding: '10px 20px',
-            fontWeight: 800,
-            fontSize: 13,
-            cursor: finding ? 'wait' : 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            boxShadow: finding ? 'none' : '0 4px 15px rgba(124,58,237,0.35)',
-            transition: 'all 0.2s',
-            justifyContent: 'center',
-          }}
-        >
-          {finding ? (
-            <><span className="spinner" /> {scanProgress || 'Scanning...'}</>
-          ) : (
-            <><IconActivity size={15} /> 🔥 Scan Market Now</>
-          )}
-        </button>
-      </div>
 
-      {/* Best Pair Result Card */}
-      {bestPairResult && bestPairResult.signal !== 'WAIT' && (
-        <div className="best-pair-result-card" style={{
-          background: bestPairResult.signal === 'UP'
-            ? 'linear-gradient(135deg, rgba(16,185,129,0.18), rgba(16,185,129,0.05))'
-            : 'linear-gradient(135deg, rgba(239,68,68,0.18), rgba(239,68,68,0.05))',
-          border: bestPairResult.signal === 'UP'
-            ? '2px solid rgba(16,185,129,0.6)'
-            : '2px solid rgba(239,68,68,0.6)',
-          borderRadius: 20,
-          padding: '22px 24px',
-          marginBottom: 20,
-          boxShadow: bestPairResult.signal === 'UP'
-            ? '0 8px 50px rgba(16,185,129,0.2)'
-            : '0 8px 50px rgba(239,68,68,0.2)',
-          animation: 'pulse-glow 2s infinite',
-        }}>
-          {/* Top label */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <span style={{
-              background: bestPairResult.signal === 'UP' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-              color: bestPairResult.signal === 'UP' ? 'var(--accent-green)' : 'var(--accent-red)',
-              border: `1px solid ${bestPairResult.signal === 'UP' ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)'}`,
-              borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 800, letterSpacing: 1.5, textTransform: 'uppercase',
-            }}>
-              🏆 #1 BEST PAIR — TRADE NOW
-            </span>
-            {bestPairResult.pair.includes('OTC') ? (
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.25)', borderRadius: 5, padding: '2px 8px' }}>OTC 24/7</span>
+        <div className="signal-controls">
+          <div className="control-group">
+            <span className="control-label">TRADING PAIR</span>
+            <CustomDropdown
+              options={activePairs}
+              value={pair}
+              onChange={setPair}
+              searchable={true}
+            />
+          </div>
+          <div className="control-group">
+            <span className="control-label">DURATION</span>
+            <CustomDropdown
+              options={DURATIONS}
+              value={duration}
+              onChange={setDuration}
+              searchable={false}
+            />
+          </div>
+          <button className="btn-generate" onClick={handleGenerate} disabled={generating}>
+            {generating ? (
+              <>
+                <span className="spinner" /> Analyzing…
+              </>
             ) : (
-              <span style={{ fontSize: 11, color: 'var(--accent-amber)', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 5, padding: '2px 8px' }}>Live Pair</span>
+              <>
+                <IconActivity size={18} /> Analyze
+              </>
             )}
-          </div>
-
-          <div className="best-pair-result-inner" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: '50%',
-              background: bestPairResult.signal === 'UP'
-                ? 'linear-gradient(135deg,rgba(16,185,129,0.3),rgba(16,185,129,0.1))'
-                : 'linear-gradient(135deg,rgba(239,68,68,0.3),rgba(239,68,68,0.1))',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: bestPairResult.signal === 'UP' ? 'var(--accent-green)' : 'var(--accent-red)',
-              flexShrink: 0, fontSize: 32,
-              boxShadow: bestPairResult.signal === 'UP' ? '0 0 20px rgba(16,185,129,0.3)' : '0 0 20px rgba(239,68,68,0.3)',
-            }}>
-              {bestPairResult.signal === 'UP' ? '📈' : '📉'}
-            </div>
-            <div style={{ flex: 1, minWidth: 160 }}>
-              <div style={{ fontSize: 32, fontWeight: 900,
-                color: bestPairResult.signal === 'UP' ? 'var(--accent-green)' : 'var(--accent-red)',
-                letterSpacing: -0.5, lineHeight: 1 }}>
-                {bestPairResult.pair}
-              </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span style={{
-                  background: bestPairResult.signal === 'UP' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                  color: bestPairResult.signal === 'UP' ? 'var(--accent-green)' : 'var(--accent-red)',
-                  border: `1px solid ${bestPairResult.signal === 'UP' ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)'}`,
-                  borderRadius: 8, padding: '5px 14px', fontSize: 15, fontWeight: 800,
-                }}>
-                  {bestPairResult.signal === 'UP' ? '⬆️ BUY / CALL' : '⬇️ SELL / PUT'}
-                </span>
-                <span style={{
-                  background: bestPairResult.confidence >= 85 ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
-                  color: bestPairResult.confidence >= 85 ? 'var(--accent-green)' : 'var(--accent-amber)',
-                  border: `1px solid ${bestPairResult.confidence >= 85 ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`,
-                  borderRadius: 8, padding: '5px 14px', fontSize: 15, fontWeight: 800,
-                }}>
-                  {bestPairResult.confidence}% Confidence
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 12, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                <span>💰 Price: <strong style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>{bestPairResult.current_price?.toFixed(5)}</strong></span>
-                <span>📊 Trend: <strong style={{ color: 'var(--text-primary)' }}>{bestPairResult.market_trend}</strong></span>
-              </div>
-            </div>
-            <div className="best-pair-action-wrapper" style={{ textAlign: 'right' }}>
-              <button
-                className="best-pair-action-btn"
-                onClick={() => { setPair(bestPairResult.pair); handleGenerate() }}
-                style={{
-                  background: bestPairResult.signal === 'UP'
-                    ? 'linear-gradient(135deg, #10b981, #059669)'
-                    : 'linear-gradient(135deg, #ef4444, #dc2626)',
-                  color: 'white', border: 'none', borderRadius: 12,
-                  padding: '12px 22px', fontWeight: 800, fontSize: 14, cursor: 'pointer',
-                  boxShadow: bestPairResult.signal === 'UP'
-                    ? '0 4px 15px rgba(16,185,129,0.4)' : '0 4px 15px rgba(239,68,68,0.4)',
-                  display: 'inline-flex', alignItems: 'center', gap: 8,
-                }}
-              >
-                <IconActivity size={16} />
-                Full Analysis Lo
-              </button>
-            </div>
-          </div>
-
-          {/* Candle timing from analysis */}
-          {bestPairResult.analysis && bestPairResult.analysis.length > 1 && (
-            <div style={{
-              marginTop: 16, padding: '10px 14px',
-              background: 'rgba(0,0,0,0.2)', borderRadius: 10,
-              fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600,
-            }}>
-              ⏱️ {bestPairResult.analysis[1]?.replace(/[⚡⏳]/g, '').trim()}
-            </div>
-          )}
+          </button>
         </div>
-      )}
-
-      {bestPairError && (
-        <div style={{
-          background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)',
-          borderRadius: 12, padding: '12px 16px', marginBottom: 16,
-          fontSize: 13, color: 'var(--accent-amber)', fontWeight: 600,
-        }}>
-          {bestPairError}
-        </div>
-      )}
-
-      {/* ── Top Pairs Leaderboard (shown when scan results > 1) ─────────── */}
-      {scanAllResults.length > 1 && (
-        <div style={{
-          background: 'rgba(15,15,30,0.6)',
-          border: '1px solid rgba(139,92,246,0.2)',
-          borderRadius: 16, padding: '16px 20px', marginBottom: 20,
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-purple)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <IconActivity size={14} /> Top {scanAllResults.length} Tradeable Pairs Right Now
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {scanAllResults.map((r, i) => (
-              <div key={r.pair} style={{
-                display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-                padding: '8px 12px',
-                background: i === 0 ? 'rgba(139,92,246,0.1)' : 'rgba(255,255,255,0.03)',
-                border: i === 0 ? '1px solid rgba(139,92,246,0.3)' : '1px solid rgba(255,255,255,0.06)',
-                borderRadius: 10,
-                cursor: 'pointer',
-              }} onClick={() => { setPair(r.pair) }}>
-                <span style={{
-                  width: 22, height: 22, borderRadius: '50%', display: 'inline-flex',
-                  alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800,
-                  background: i === 0 ? 'var(--accent-purple)' : 'rgba(255,255,255,0.08)',
-                  color: i === 0 ? 'white' : 'var(--text-muted)', flexShrink: 0,
-                }}>#{i + 1}</span>
-                <span style={{ fontWeight: 700, fontSize: 14, flex: 1, color: 'var(--text-primary)' }}>{r.pair}</span>
-                <span style={{
-                  fontSize: 11, padding: '3px 8px', borderRadius: 6, fontWeight: 700,
-                  background: r.signal === 'UP' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                  color: r.signal === 'UP' ? 'var(--accent-green)' : 'var(--accent-red)',
-                  border: `1px solid ${r.signal === 'UP' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                }}>
-                  {r.signal === 'UP' ? '⬆ BUY' : '⬇ SELL'}
-                </span>
-                <span style={{
-                  fontSize: 12, fontWeight: 800, minWidth: 48, textAlign: 'right',
-                  color: r.confidence >= 85 ? 'var(--accent-green)' : r.confidence >= 75 ? 'var(--accent-amber)' : 'var(--text-secondary)',
-                }}>{r.confidence}%</span>
-                {r.pair.includes('OTC') ? (
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: 4, padding: '1px 6px' }}>OTC</span>
-                ) : (
-                  <span style={{ fontSize: 10, color: 'var(--accent-amber)', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 4, padding: '1px 6px' }}>Live</span>
-                )}
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, textAlign: 'center' }}>
-            Click any pair to auto-select it for analysis
-          </div>
-        </div>
-      )}
-
-      {/* Manual signal controls */}
-      <div className="signal-controls">
-        <div className="control-group">
-          <span className="control-label">Trading Pair</span>
-          <CustomDropdown
-            options={activePairs}
-            value={pair}
-            onChange={setPair}
-            searchable={true}
-          />
-        </div>
-        <div className="control-group">
-          <span className="control-label">Duration</span>
-          <CustomDropdown
-            options={DURATIONS}
-            value={duration}
-            onChange={setDuration}
-            searchable={false}
-          />
-        </div>
-        <button className="btn-generate" onClick={handleGenerate} disabled={generating || finding} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          {generating ? (
-            <>
-              <span className="spinner" /> Analyzing…
-            </>
-          ) : (
-            <>
-              <IconActivity size={16} /> Analyze
-            </>
-          )}
-        </button>
       </div>
-
-      {marketType === 'quotex' && !generating && !result && !bestPairResult && (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8, paddingLeft: 2 }}>
-          💡 OTC pairs 24/7 kaam karte hain · Live pairs Mon–Fri · Upar 🔥 button se best pair auto dhundo
-        </div>
-      )}
 
       {error && <div className="login-error" style={{ maxWidth: 520, marginTop: 16 }}>{error}</div>}
 
