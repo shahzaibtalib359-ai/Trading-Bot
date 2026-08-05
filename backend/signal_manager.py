@@ -79,6 +79,7 @@ class SignalManager:
                         analysis = [
                             f"Chinese Bot Pro AI Signal: {raw_dir} ({confidence}% Win Target Score)",
                             f"Timeframe: {tf_code} | Pair: {clean_pair}",
+                            f"⏰ ENTRY TIMING: Always enter at NEW CANDLE OPEN (00:00–00:05s)! Do not enter mid-candle.",
                             f"Higher Timeframe Trend: {htf}",
                             f"AI Confirmations: {conf_str}",
                             f"Engine: {src}"
