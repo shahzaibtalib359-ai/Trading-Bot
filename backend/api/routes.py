@@ -8,7 +8,7 @@ import jwt
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -351,9 +351,13 @@ async def app_config() -> dict[str, list[str] | dict[str, list[str]]]:
 @router.post("/signals/generate", response_model=SignalResponse)
 async def generate_signal(
     request: SignalRequest,
+    response: Response,
     repository: SignalRepository = Depends(get_repository),
     api_key_details: dict = Depends(verify_api_key_access),
 ) -> SignalResponse:
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     validate_pair(request.mode, request.pair)
     user_id = api_key_details["user_id"]
     try:
