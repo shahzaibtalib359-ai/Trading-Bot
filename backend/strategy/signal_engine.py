@@ -707,42 +707,34 @@ class SignalEngine:
         #  LAYER 5 — CONTRADICTION VETO CHECK (EXTREME REVERSAL BOUNDS)
         # ══════════════════════════════════════════════════════════════════
         def _is_vetoed_bull() -> tuple[bool, str]:
-            """Check if bullish signal has overbought bounds or micro-momentum contradiction."""
-            if rsi14 > 65:
-                return True, f"RSI={rsi14:.1f} near overbought (>65) — high risk of 1-min pullback drop"
-            if sk14 > 75 and sd14 > 75:
-                return True, f"Stochastic={sk14:.1f} overbought — risk of 1-min pullback"
-            if bb_pct > 0.88:
-                return True, f"BB={bb_pct:.2f} near upper band limit"
-            if adx_val < 20 and (not adx_clear):
-                return True, f"ADX={adx_val:.1f} extremely choppy market (fake UP breakout)"
-            if dir3 == -1:
-                return True, "Immediate 3-candle slope is negative (micro-downtrend)"
-            if candles[-1].close < candles[-1].open:
-                return True, "Latest candle closed red (counter-momentum)"
+            """Check if bullish signal has extreme overbought bounds or major structural contradiction."""
+            if rsi14 > 78:
+                return True, f"RSI={rsi14:.1f} extreme overbought (>78) — high risk of pullback"
+            if sk14 > 88 and sd14 > 88:
+                return True, f"Stochastic={sk14:.1f} extreme overbought (>88)"
+            if bb_pct > 0.95:
+                return True, f"BB={bb_pct:.2f} outer band limit (>0.95)"
+            if adx_val < 14 and (not adx_clear):
+                return True, f"ADX={adx_val:.1f} flat market"
             return False, ""
 
         def _is_vetoed_bear() -> tuple[bool, str]:
-            """Check if bearish signal has oversold bounds or micro-momentum contradiction."""
-            if rsi14 < 38:
-                return True, f"RSI={rsi14:.1f} near oversold (<38) — high risk of 1-min bounce green candle"
-            if sk14 < 25 and sd14 < 25:
-                return True, f"Stochastic={sk14:.1f} oversold — risk of 1-min bounce"
-            if bb_pct < 0.12:
-                return True, f"BB={bb_pct:.2f} near lower band limit"
-            if adx_val < 20 and (not adx_clear):
-                return True, f"ADX={adx_val:.1f} extremely choppy market (fake DOWN breakout)"
-            if dir3 == +1:
-                return True, "Immediate 3-candle slope is positive (micro-uptrend)"
-            if candles[-1].close > candles[-1].open:
-                return True, "Latest candle closed green (counter-momentum)"
+            """Check if bearish signal has extreme oversold bounds or major structural contradiction."""
+            if rsi14 < 22:
+                return True, f"RSI={rsi14:.1f} extreme oversold (<22) — high risk of bounce"
+            if sk14 < 12 and sd14 < 12:
+                return True, f"Stochastic={sk14:.1f} extreme oversold (<12)"
+            if bb_pct < 0.05:
+                return True, f"BB={bb_pct:.2f} outer band limit (<0.05)"
+            if adx_val < 14 and (not adx_clear):
+                return True, f"ADX={adx_val:.1f} flat market"
             return False, ""
 
         # ══════════════════════════════════════════════════════════════════
         #  FINAL DECISION — ULTRA ACCURATE MARKET ANALYSIS & STRICT SIGNALS
         # ══════════════════════════════════════════════════════════════════
-        MIN_EDGE = 6      # Minimum 6-point gap between bull and bear
-        MIN_DOMINANT = 7  # Minimum 7 points for dominant direction
+        MIN_EDGE = 3      # Minimum 3-point gap between bull and bear
+        MIN_DOMINANT = 4  # Minimum 4 points for dominant direction
         
         has_bull_edge = (bull_weight > bear_weight) and (edge_w >= MIN_EDGE) and (bull_weight >= MIN_DOMINANT)
         has_bear_edge = (bear_weight > bull_weight) and (edge_w >= MIN_EDGE) and (bear_weight >= MIN_DOMINANT)
